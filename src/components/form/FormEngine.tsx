@@ -159,7 +159,11 @@ function RenderQuestion({ question, value, onChange }: { question: Question, val
         </label>
         <div className="space-y-3">
           {question.options.map((opt) => (
-            <label key={opt} className={`flex items-center p-4 rounded-xl border transition-all cursor-pointer ${value === opt ? 'bg-primary/10 border-primary shadow-[inset_0_0_10px_rgba(16,185,129,0.2)]' : 'bg-black/20 border-border hover:border-primary/40'}`}>
+            <label 
+              key={opt} 
+              onClick={() => onChange(opt)}
+              className={`flex items-center p-4 rounded-xl border transition-all cursor-pointer ${value === opt ? 'bg-primary/10 border-primary shadow-[inset_0_0_10px_rgba(16,185,129,0.2)]' : 'bg-black/20 border-border hover:border-primary/40'}`}
+            >
               <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 transition-colors ${value === opt ? 'border-primary' : 'border-gray-500'}`}>
                  {value === opt && <div className="w-2.5 h-2.5 bg-primary rounded-full shadow-[0_0_5px_var(--primary)]" />}
               </div>
