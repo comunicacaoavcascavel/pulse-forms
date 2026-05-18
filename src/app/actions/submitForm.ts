@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server';
 import crypto from 'crypto';
+import { runAiEvaluation } from './aiEvaluation';
 
 export async function submitFormAction(formId: string, payload: Record<string, any>) {
   const supabase = await createClient();
@@ -64,6 +65,13 @@ export async function submitFormAction(formId: string, payload: Record<string, a
 
   if (answersToInsert.length > 0) {
       await supabase.from('form_answers').insert(answersToInsert);
+  }
+
+  // 5. Executar a Avaliação por IA de forma assíncrona/segura
+  try {
+    await runAiEvaluation(submission.id);
+  } catch (aiErr) {
+    console.error('Erro ao executar avaliação por IA:', aiErr);
   }
 
   return { success: true, protocolNumber: submissionNumber };

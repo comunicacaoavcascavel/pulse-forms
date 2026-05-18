@@ -1,17 +1,25 @@
 'use client';
-import { Button } from '@/components/ui/Button';
+import { Link as LinkIcon, Check } from 'lucide-react';
+import { useState } from 'react';
 
 export function CopyButton({ slug }: { slug: string }) {
+  const [copied, setCopied] = useState(false);
+
   const handleCopy = () => {
     const fullUrl = `${window.location.origin}/f/${slug}`;
     navigator.clipboard.writeText(fullUrl);
-    alert('Link público de inscrição copiado com sucesso! Você já pode enviar para os membros.');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <Button variant="outline" className="w-full" onClick={handleCopy}>
-      Copiar Link Público
-    </Button>
+    <button 
+      onClick={handleCopy}
+      className="p-2 rounded-lg bg-white/5 hover:bg-blue-500/20 text-gray-400 hover:text-blue-400 transition-colors border border-white/5 hover:border-blue-500/30"
+      title="Copiar Link Público"
+    >
+      {copied ? <Check size={14} className="text-emerald-400" /> : <LinkIcon size={14} />}
+    </button>
   );
 }
 

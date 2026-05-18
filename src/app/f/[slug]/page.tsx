@@ -1,11 +1,12 @@
 import React from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/server';
 import { FormEngine } from '@/components/form/FormEngine';
 import { FormSchema } from '@/types/form';
 import { notFound } from 'next/navigation';
 
 export default async function FormPage(props: { params: Promise<{ slug: string }> }) {
   const { slug } = await props.params;
+  const supabase = await createClient();
 
   // 1. Buscar o form
   const { data: form, error: formErr } = await supabase
@@ -29,7 +30,7 @@ export default async function FormPage(props: { params: Promise<{ slug: string }
     return notFound();
   }
 
-  // 3. Converter do formato do banco para o nosso FormSchema
+  // 3. Converter para FormSchema
   const schema: FormSchema = {
     id: form.id,
     slug: form.slug,
@@ -41,7 +42,7 @@ export default async function FormPage(props: { params: Promise<{ slug: string }
     welcome_disclaimer: form.welcome_disclaimer,
     sections: sectionsData.map((sec: any) => ({
       id: sec.id,
-      key: `sec_${sec.order_index}`, // Fallback key
+      key: `sec_${sec.order_index}`,
       title: sec.title,
       description: sec.description,
       order: sec.order_index,
@@ -55,21 +56,54 @@ export default async function FormPage(props: { params: Promise<{ slug: string }
 
           return {
             id: q.id,
-            key: q.id, // Usamos o UUID como chave para guardar as respostas
+            key: q.id,
             type: q.type,
             label: q.label,
             description: q.description,
             required: q.is_required,
             options: parsedOptions
-          }
+          };
         })
     }))
   };
 
+  // 4. Processar tema
+  const theme = form.theme || {};
+  let bgStyle = '';
+  if (theme.backgroundType === 'solid') {
+    bgStyle = theme.backgroundColor || '#000000';
+  } else if (theme.backgroundType === 'gradient') {
+    bgStyle = theme.backgroundGradient || 'linear-gradient(to bottom right, #020617, #064e3b)';
+  } else if (theme.backgroundType === 'image' && theme.backgroundImage) {
+    bgStyle = `url(${theme.backgroundImage}) center/cover fixed`;
+  } else {
+    // default gradient
+    bgStyle = 'linear-gradient(to bottom right, #020617, #064e3b)';
+  }
+
+  const primaryColor = theme.primaryColor || '#10b981';
+
   return (
-    <div className="min-h-screen relative overflow-hidden bg-background pb-12">
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 blur-[120px] rounded-full pointer-events-none"></div>
-      <FormEngine schema={schema} />
+    <div
+      className="min-h-screen relative overflow-hidden pb-12"
+      style={{ 
+        background: bgStyle,
+        '--primary': primaryColor,
+        '--primary-hover': primaryColor,
+      } as React.CSSProperties}
+    >
+      {/* Overlay escuro para melhorar legibilidade quando for imagem */}
+      {theme.backgroundType === 'image' && (
+        <div className="absolute inset-0 bg-black/60 pointer-events-none" />
+      )}
+      {/* Glow */}
+      <div
+        className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] blur-[120px] rounded-full pointer-events-none opacity-40"
+        style={{ background: primaryColor }}
+      />
+      <div className="relative z-10">
+        <FormEngine schema={schema} primaryColor={primaryColor} />
+      </div>
     </div>
   );
 }

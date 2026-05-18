@@ -10,9 +10,10 @@ import { submitFormAction } from '@/app/actions/submitForm';
 
 interface FormEngineProps {
   schema: FormSchema;
+  primaryColor?: string;
 }
 
-export function FormEngine({ schema }: FormEngineProps) {
+export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps) {
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
@@ -79,12 +80,29 @@ export function FormEngine({ schema }: FormEngineProps) {
     return (
       <div className="max-w-2xl w-full mx-auto mt-12 mb-20 px-6 z-10">
         <div className="text-center mb-10 animate-in fade-in slide-in-from-top-4 duration-500">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-black border border-primary/20 shadow-glow-inner mb-6">
-             <svg className="w-8 h-8 text-primary drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div 
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-black border shadow-glow-inner mb-6"
+            style={{ borderColor: `${primaryColor}33` }}
+          >
+             <svg 
+               className="w-8 h-8" 
+               fill="none" 
+               stroke="currentColor" 
+               viewBox="0 0 24 24"
+               style={{ 
+                 color: primaryColor,
+                 filter: `drop-shadow(0 0 8px ${primaryColor})` 
+               }}
+             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
             </svg>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-100 to-primary leading-tight">
+          <h1 
+            className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-transparent bg-clip-text bg-gradient-to-r leading-tight"
+            style={{ 
+              backgroundImage: `linear-gradient(to right, #ffffff, ${primaryColor})` 
+            }}
+          >
             {schema.title}
           </h1>
           {schema.description && (
@@ -117,16 +135,16 @@ export function FormEngine({ schema }: FormEngineProps) {
             )}
           </div>
 
-          <Button 
-            variant="gradient" 
-            className="w-full py-4 text-lg font-semibold flex items-center justify-center gap-2"
+          <button 
+            className="w-full py-4 text-lg font-semibold flex items-center justify-center gap-2 rounded-xl transition-all hover:opacity-90 active:scale-[0.98] text-black shadow-lg"
+            style={{ backgroundColor: primaryColor }}
             onClick={() => {
               setShowWelcome(false);
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
           >
-            Iniciar Inscrição
-          </Button>
+            Iniciar Inscrição <ChevronRight className="w-5 h-5" />
+          </button>
         </Card>
         
         <p className="text-center text-muted text-sm mt-8">
@@ -172,7 +190,14 @@ export function FormEngine({ schema }: FormEngineProps) {
         </div>
         <div className="flex gap-2">
           {schema.sections.map((_, idx) => (
-            <div key={idx} className={`h-1.5 w-8 rounded-full transition-all ${idx <= currentSectionIndex ? 'bg-primary shadow-[0_0_8px_var(--primary)]' : 'bg-border'}`} />
+            <div 
+              key={idx} 
+              className="h-1.5 w-8 rounded-full transition-all"
+              style={{ 
+                backgroundColor: idx <= currentSectionIndex ? primaryColor : 'rgba(255,255,255,0.1)',
+                boxShadow: idx <= currentSectionIndex ? `0 0 8px ${primaryColor}80` : 'none'
+              }} 
+            />
           ))}
         </div>
       </div>
@@ -203,10 +228,15 @@ export function FormEngine({ schema }: FormEngineProps) {
              </Button>
            ) : <div/>}
            
-           <Button variant="primary" className="w-auto px-8 flex items-center gap-2" onClick={handleNext} disabled={isSubmitting}>
-             {isSubmitting ? 'Processando...' : (isLastSection ? 'Finalizar Inscrição' : 'Próxima etapa')} 
-             {!isLastSection && !isSubmitting && <ChevronRight className="w-5 h-5" />}
-           </Button>
+           <button 
+              className="px-8 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] text-black shadow-lg disabled:opacity-50"
+              style={{ backgroundColor: primaryColor }}
+              onClick={handleNext}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Processando...' : (isLastSection ? 'Finalizar Inscrição' : 'Próxima etapa')} 
+              {!isLastSection && !isSubmitting && <ChevronRight className="w-5 h-5" />}
+            </button>
         </div>
       </Card>
     </div>
