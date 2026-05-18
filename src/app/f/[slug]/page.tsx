@@ -35,6 +35,10 @@ export default async function FormPage(props: { params: Promise<{ slug: string }
     slug: form.slug,
     title: form.title,
     description: form.description,
+    welcome_title: form.welcome_title,
+    welcome_text: form.welcome_text,
+    welcome_duration: form.welcome_duration,
+    welcome_disclaimer: form.welcome_disclaimer,
     sections: sectionsData.map((sec: any) => ({
       id: sec.id,
       key: `sec_${sec.order_index}`, // Fallback key

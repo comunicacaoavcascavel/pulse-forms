@@ -19,6 +19,7 @@ export function FormEngine({ schema }: FormEngineProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const [showWelcome, setShowWelcome] = useState(!!schema.welcome_text);
 
   const currentSection = schema.sections[currentSectionIndex];
   const isLastSection = currentSectionIndex === schema.sections.length - 1;
@@ -73,6 +74,67 @@ export function FormEngine({ schema }: FormEngineProps) {
       }
     }
   };
+
+  if (showWelcome && schema.welcome_text) {
+    return (
+      <div className="max-w-2xl w-full mx-auto mt-12 mb-20 px-6 z-10">
+        <div className="text-center mb-10 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-black border border-primary/20 shadow-glow-inner mb-6">
+             <svg className="w-8 h-8 text-primary drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+            </svg>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-100 to-primary leading-tight">
+            {schema.title}
+          </h1>
+          {schema.description && (
+            <p className="text-muted text-lg">
+              {schema.description}
+            </p>
+          )}
+        </div>
+
+        <Card glow className="p-8 md:p-12 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 border border-white/5 bg-black/40">
+           <div className="absolute top-4 right-4 w-6 h-6 bg-primary rounded-full blur-xl opacity-60"></div>
+
+          <h2 className="text-2xl font-bold mb-6 text-center text-white">{schema.welcome_title || 'Bem-vindo(a) ao processo!'}</h2>
+          
+          <div className="space-y-6 text-gray-300 mb-10 text-left">
+            {schema.welcome_text.split('\n\n').map((p, index) => (
+              <p key={index} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: p.replace(/\*(.*?)\*/g, '<strong>$1</strong>') }} />
+            ))}
+            
+            {schema.welcome_disclaimer && (
+              <div className="bg-black/30 border border-primary/20 rounded-xl p-5 flex gap-4 mt-6 items-start shadow-glow-inner">
+                <svg className="w-6 h-6 text-primary flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                <div>
+                  <h4 className="font-semibold text-gray-200 text-sm mb-1">Aviso de Sigilo Ministerial</h4>
+                  <p className="text-sm text-gray-400 leading-relaxed">
+                    {schema.welcome_disclaimer}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <Button 
+            variant="gradient" 
+            className="w-full py-4 text-lg font-semibold flex items-center justify-center gap-2"
+            onClick={() => {
+              setShowWelcome(false);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          >
+            Iniciar Inscrição
+          </Button>
+        </Card>
+        
+        <p className="text-center text-muted text-sm mt-8">
+          Pulse Forms &copy; 2026. Todos os direitos reservados.
+        </p>
+      </div>
+    );
+  }
 
   if (submissionId) {
     return (

@@ -24,5 +24,9 @@ export interface FormSchema {
   slug: string;
   title: string;
   description?: string;
+  welcome_title?: string;
+  welcome_text?: string;
+  welcome_duration?: string;
+  welcome_disclaimer?: string;
   sections: Section[];
 }
