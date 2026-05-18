@@ -110,28 +110,42 @@ export default async function SubmissionDetailPage(
                       {answer.form_questions?.label}
                     </p>
                     <div className="text-gray-200 text-sm leading-relaxed">
-                      {answer.answer_text && (answer.answer_text.startsWith('http://') || answer.answer_text.startsWith('https://')) ? (
-                        <span className="flex flex-col gap-2 mt-1">
-                          <a 
-                            href={answer.answer_text} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 hover:underline font-medium text-sm"
-                          >
-                            <span>🔗 Abrir Link / Ver Vídeo</span>
-                          </a>
-                          {(answer.answer_text.toLowerCase().includes('.mp4') || 
-                            answer.answer_text.toLowerCase().includes('.mov') || 
-                            answer.answer_text.toLowerCase().includes('.webm') || 
-                            answer.answer_text.includes('/storage/v1/object/public/videos/')) && (
-                            <video 
-                              src={answer.answer_text} 
-                              controls 
-                              className="max-w-md w-full rounded-lg border border-white/10 bg-black/40 mt-1 max-h-[300px]"
-                            />
-                          )}
-                        </span>
-                      ) : (
+                      {answer.answer_text && (answer.answer_text.startsWith('http://') || answer.answer_text.startsWith('https://')) ? (() => {
+                        let videoUrl = answer.answer_text;
+                        const isCloudinary = videoUrl.includes('res.cloudinary.com');
+                        if (isCloudinary) {
+                          // Forçar a extensão para .mp4 e injetar f_auto,q_auto para o Cloudinary fazer transcodificação automática
+                          videoUrl = videoUrl.replace(/\.[a-zA-Z0-9]+$/, '.mp4');
+                          if (!videoUrl.includes('/f_auto')) {
+                            videoUrl = videoUrl.replace('/video/upload/', '/video/upload/f_auto,q_auto/');
+                          }
+                        }
+                        const isVideo = videoUrl.toLowerCase().includes('.mp4') || 
+                                        videoUrl.toLowerCase().includes('.mov') || 
+                                        videoUrl.toLowerCase().includes('.webm') || 
+                                        videoUrl.includes('/storage/v1/object/public/videos/') ||
+                                        isCloudinary;
+                        return (
+                          <span className="flex flex-col gap-2 mt-1">
+                            <a 
+                              href={videoUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 hover:underline font-medium text-sm"
+                            >
+                              <span>🔗 Abrir Link / Ver Vídeo</span>
+                            </a>
+                            {isVideo && (
+                              <video 
+                                src={videoUrl} 
+                                controls 
+                                preload="metadata"
+                                className="max-w-md w-full rounded-lg border border-white/10 bg-black/40 mt-1 max-h-[300px]"
+                              />
+                            )}
+                          </span>
+                        );
+                      })() : (
                         <p>{answer.answer_text ?? (
                           answer.answer_json ? JSON.stringify(answer.answer_json, null, 2) : (
                             <span className="text-gray-600 italic">Sem resposta</span>
