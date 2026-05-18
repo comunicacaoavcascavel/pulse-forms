@@ -38,7 +38,7 @@ export async function submitFormAction(formId: string, payload: Record<string, a
   }
 
   // 3. Criar Submissão Oficial
-  const submissionNumber = `PULSE-${crypto.randomInt(100000, 999999)}`;
+  const submissionNumber = `PULSE-${Math.floor(100000 + Math.random() * 900000)}`;
   const { data: submission, error: sErr } = await supabase.from('form_submissions').insert({
      form_id: formId,
      participant_id: participant.id,

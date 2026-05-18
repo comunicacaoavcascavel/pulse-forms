@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ChevronRight, AlertCircle, UploadCloud, FileVideo, Trash2, Loader2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { submitFormAction } from '@/app/actions/submitForm';
 
 interface FormEngineProps {
   schema: FormSchema;
@@ -61,7 +62,6 @@ export function FormEngine({ schema }: FormEngineProps) {
     } else {
       setIsSubmitting(true);
       try {
-        const { submitFormAction } = await import('@/app/actions/submitForm');
         const res = await submitFormAction(schema.id, answers);
         setSubmissionId(res.protocolNumber);
         window.scrollTo({ top: 0, behavior: 'smooth' });
