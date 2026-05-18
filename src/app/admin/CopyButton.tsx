@@ -1,9 +1,10 @@
 'use client';
 import { Button } from '@/components/ui/Button';
 
-export function CopyButton({ link }: { link: string }) {
+export function CopyButton({ slug }: { slug: string }) {
   const handleCopy = () => {
-    navigator.clipboard.writeText(link);
+    const fullUrl = `${window.location.origin}/f/${slug}`;
+    navigator.clipboard.writeText(fullUrl);
     alert('Link público de inscrição copiado com sucesso! Você já pode enviar para os membros.');
   };
 
@@ -13,3 +14,4 @@ export function CopyButton({ link }: { link: string }) {
     </Button>
   );
 }
+

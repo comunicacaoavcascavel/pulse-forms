@@ -99,7 +99,7 @@ export default async function AdminDashboard() {
                   <Link href={`/admin/forms/${form.id}`}>
                     <Button variant="primary" className="w-full text-sm py-2.5">Ver Inscrições</Button>
                   </Link>
-                  <CopyButton link={`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/f/${form.slug}`} />
+                  <CopyButton slug={form.slug} />
                 </div>
               </div>
             </Card>
