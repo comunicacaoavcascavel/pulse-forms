@@ -204,7 +204,6 @@ function VideoUploadField({ question, value, onChange }: { question: Question, v
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  const supabase = createClient();
 
   useEffect(() => {
     if (value) {
@@ -217,8 +216,8 @@ function VideoUploadField({ question, value, onChange }: { question: Question, v
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit: 50MB (52,428,800 bytes)
-    const MAX_SIZE_MB = 50;
+    // Check size limit: 200MB (209,715,200 bytes)
+    const MAX_SIZE_MB = 200;
     const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
     if (file.size > MAX_SIZE_BYTES) {
       setError(`O arquivo é muito grande. O limite máximo é de ${MAX_SIZE_MB} MB.`);
@@ -233,37 +232,54 @@ function VideoUploadField({ question, value, onChange }: { question: Question, v
 
     setError(null);
     setUploading(true);
-    setProgress(15);
+    setProgress(5);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const randomPath = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-      const filePath = `video_submissions/${randomPath}`;
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', 'https://api.cloudinary.com/v1_1/dw75s1ygk/video/upload', true);
 
-      // Upload file directly to Supabase storage bucket 'videos'
-      const { data, error: uploadError } = await supabase.storage
-        .from('videos')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
+      // Track upload progress in real-time
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100);
+          setProgress(percentComplete);
+        }
+      };
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            const videoUrl = response.secure_url;
+            onChange(videoUrl);
+            setFileName(file.name);
+            setProgress(100);
+            setUploading(false);
+          } catch (e) {
+            console.error(e);
+            setError('Erro ao processar a resposta do servidor de vídeo.');
+            setUploading(false);
+          }
+        } else {
+          console.error('Cloudinary upload error', xhr.responseText);
+          setError('Falha ao enviar o vídeo para o servidor. Tente novamente.');
+          setUploading(false);
+        }
+      };
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('videos')
-        .getPublicUrl(filePath);
+      xhr.onerror = () => {
+        setError('Erro de conexão ao enviar o arquivo. Verifique sua internet.');
+        setUploading(false);
+      };
 
-      onChange(publicUrl);
-      setFileName(file.name);
-      setProgress(100);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'pulse_uploads');
+      
+      xhr.send(formData);
     } catch (err: any) {
       console.error(err);
-      setError('Falha ao enviar o arquivo. Tente novamente.');
-    } finally {
+      setError('Falha ao iniciar o envio do arquivo. Tente novamente.');
       setUploading(false);
     }
   };
@@ -307,8 +323,8 @@ function VideoUploadField({ question, value, onChange }: { question: Question, v
           {uploading ? (
             <div className="flex flex-col items-center justify-center py-4">
               <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
-              <p className="text-sm font-medium text-gray-200">Enviando vídeo... {progress > 15 && `${progress}%`}</p>
-              <p className="text-xs text-gray-400 mt-1">Por favor, não feche esta página.</p>
+              <p className="text-sm font-medium text-gray-200">Enviando vídeo... {progress > 0 && `${progress}%`}</p>
+              <p className="text-xs text-gray-400 mt-1">Por favor, não feche esta página até o upload concluir.</p>
               <div className="w-full max-w-[200px] bg-black/40 h-1.5 rounded-full mt-4 overflow-hidden border border-white/5">
                 <div className="bg-primary h-full transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
@@ -317,7 +333,7 @@ function VideoUploadField({ question, value, onChange }: { question: Question, v
             <label className="flex flex-col items-center justify-center cursor-pointer py-4">
               <UploadCloud className="w-10 h-10 text-gray-400 mb-3" />
               <span className="text-sm font-medium text-gray-200">Clique para selecionar seu vídeo</span>
-              <span className="text-xs text-gray-400 mt-1.5">Formatos aceitos: MP4, MOV, AVI (Tamanho máximo: 50 MB)</span>
+              <span className="text-xs text-gray-400 mt-1.5">Formatos aceitos: MP4, MOV, AVI (Tamanho máximo: 200 MB)</span>
               <input 
                 type="file" 
                 accept="video/*" 
