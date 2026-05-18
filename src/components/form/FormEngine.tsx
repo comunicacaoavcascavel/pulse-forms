@@ -168,25 +168,153 @@ function RenderQuestion({ question, value, onChange }: { question: Question, val
         <label className="block text-sm font-medium mb-3 text-gray-200">
           {question.label} {question.required && <span className="text-primary">*</span>}
         </label>
+        {question.description && (
+          <p className="text-xs text-gray-400 mb-3">{question.description}</p>
+        )}
         <div className="space-y-3">
-          {question.options.map((opt) => (
-            <label 
-              key={opt} 
-              onClick={() => onChange(opt)}
-              className={`flex items-center p-4 rounded-xl border transition-all cursor-pointer ${value === opt ? 'bg-primary/10 border-primary shadow-[inset_0_0_10px_rgba(16,185,129,0.2)]' : 'bg-black/20 border-border hover:border-primary/40'}`}
-            >
-              <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 transition-colors ${value === opt ? 'border-primary' : 'border-gray-500'}`}>
-                 {value === opt && <div className="w-2.5 h-2.5 bg-primary rounded-full shadow-[0_0_5px_var(--primary)]" />}
-              </div>
-              <span className="text-sm text-gray-200">{opt}</span>
-            </label>
-          ))}
+          {question.options.map((optOption) => {
+            let optionKey = '';
+            let optionDisplayLabel = '';
+            let optionSubText = '';
+
+            if (typeof optOption === 'object' && optOption !== null) {
+              const keys = Object.keys(optOption);
+              if (keys.length > 0) {
+                optionKey = keys[0];
+                optionDisplayLabel = keys[0];
+                optionSubText = (optOption as any)[keys[0]];
+              }
+            } else {
+              optionKey = String(optOption);
+              optionDisplayLabel = String(optOption);
+            }
+
+            const isSelected = value === optionKey;
+
+            return (
+              <label 
+                key={optionKey} 
+                onClick={() => onChange(optionKey)}
+                className={`flex flex-col p-4 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-primary/10 border-primary shadow-[inset_0_0_10px_rgba(16,185,129,0.2)]' : 'bg-black/20 border-border hover:border-primary/40'}`}
+              >
+                <div className="flex items-center">
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 shrink-0 transition-colors ${isSelected ? 'border-primary' : 'border-gray-500'}`}>
+                     {isSelected && <div className="w-2.5 h-2.5 bg-primary rounded-full shadow-[0_0_5px_var(--primary)]" />}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-200">{optionDisplayLabel}</span>
+                </div>
+                {optionSubText && (
+                  <p className="text-xs text-gray-400 mt-1.5 pl-8 leading-relaxed">
+                    {optionSubText}
+                  </p>
+                )}
+              </label>
+            );
+          })}
         </div>
       </div>
     );
   }
 
-  // Fallback for text, email, phone, url, date
+  if (question.type === 'multiple_choice' && question.options) {
+    const selectedValues = value ? value.split(', ') : [];
+    
+    const toggleOption = (optOption: any) => {
+      let optionKey = '';
+      if (typeof optOption === 'object' && optOption !== null) {
+        const keys = Object.keys(optOption);
+        if (keys.length > 0) optionKey = keys[0];
+      } else {
+        optionKey = String(optOption);
+      }
+
+      let newValues;
+      if (selectedValues.includes(optionKey)) {
+        newValues = selectedValues.filter(v => v !== optionKey);
+      } else {
+        newValues = [...selectedValues, optionKey];
+      }
+      onChange(newValues.join(', '));
+    };
+
+    return (
+      <div className="w-full">
+        <label className="block text-sm font-medium mb-3 text-gray-200">
+          {question.label} {question.required && <span className="text-primary">*</span>}
+        </label>
+        {question.description && (
+          <p className="text-xs text-gray-400 mb-3">{question.description}</p>
+        )}
+        <div className="space-y-3">
+          {question.options.map((optOption) => {
+            let optionKey = '';
+            let optionDisplayLabel = '';
+            let optionSubText = '';
+
+            if (typeof optOption === 'object' && optOption !== null) {
+              const keys = Object.keys(optOption);
+              if (keys.length > 0) {
+                optionKey = keys[0];
+                optionDisplayLabel = keys[0];
+                optionSubText = (optOption as any)[keys[0]];
+              }
+            } else {
+              optionKey = String(optOption);
+              optionDisplayLabel = String(optOption);
+            }
+
+            const isChecked = selectedValues.includes(optionKey);
+
+            return (
+              <label 
+                key={optionKey} 
+                onClick={() => toggleOption(optOption)}
+                className={`flex flex-col p-4 rounded-xl border transition-all cursor-pointer ${isChecked ? 'bg-primary/10 border-primary shadow-[inset_0_0_10px_rgba(16,185,129,0.2)]' : 'bg-black/20 border-border hover:border-primary/40'}`}
+              >
+                <div className="flex items-center">
+                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center mr-3 shrink-0 transition-colors ${isChecked ? 'bg-primary border-primary' : 'border-gray-500'}`}>
+                     {isChecked && (
+                       <svg className="w-3.5 h-3.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                       </svg>
+                     )}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-200">{optionDisplayLabel}</span>
+                </div>
+                {optionSubText && (
+                  <p className="text-xs text-gray-400 mt-1.5 pl-8 leading-relaxed">
+                    {optionSubText}
+                  </p>
+                )}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback for text, email, phone, url, date, long_text
+  if (question.type === 'long_text') {
+    return (
+      <div className="w-full">
+        <label className="block text-sm font-medium mb-1.5 text-gray-200">
+          {question.label} {question.required && <span className="text-primary">*</span>}
+        </label>
+        {question.description && (
+          <p className="text-xs text-gray-400 mb-3">{question.description}</p>
+        )}
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Digite sua resposta detalhada..."
+          rows={4}
+          className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-gray-100 placeholder-gray-500 transition-all focus:border-primary focus:bg-black/40 focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed resize-y"
+        />
+      </div>
+    );
+  }
+
   return (
     <Input 
       label={`${question.label} ${question.required ? '*' : ''}`}
