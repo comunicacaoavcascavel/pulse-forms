@@ -109,13 +109,36 @@ export default async function SubmissionDetailPage(
                     <p className="text-xs text-muted uppercase tracking-wider mb-1">
                       {answer.form_questions?.label}
                     </p>
-                    <p className="text-gray-200 text-sm leading-relaxed">
-                      {answer.answer_text ?? (
-                        answer.answer_json ? JSON.stringify(answer.answer_json, null, 2) : (
-                          <span className="text-gray-600 italic">Sem resposta</span>
-                        )
+                    <div className="text-gray-200 text-sm leading-relaxed">
+                      {answer.answer_text && (answer.answer_text.startsWith('http://') || answer.answer_text.startsWith('https://')) ? (
+                        <span className="flex flex-col gap-2 mt-1">
+                          <a 
+                            href={answer.answer_text} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 hover:underline font-medium text-sm"
+                          >
+                            <span>🔗 Abrir Link / Ver Vídeo</span>
+                          </a>
+                          {(answer.answer_text.toLowerCase().includes('.mp4') || 
+                            answer.answer_text.toLowerCase().includes('.mov') || 
+                            answer.answer_text.toLowerCase().includes('.webm') || 
+                            answer.answer_text.includes('/storage/v1/object/public/videos/')) && (
+                            <video 
+                              src={answer.answer_text} 
+                              controls 
+                              className="max-w-md w-full rounded-lg border border-white/10 bg-black/40 mt-1 max-h-[300px]"
+                            />
+                          )}
+                        </span>
+                      ) : (
+                        <p>{answer.answer_text ?? (
+                          answer.answer_json ? JSON.stringify(answer.answer_json, null, 2) : (
+                            <span className="text-gray-600 italic">Sem resposta</span>
+                          )
+                        )}</p>
                       )}
-                    </p>
+                    </div>
                   </div>
                 ))}
               </div>

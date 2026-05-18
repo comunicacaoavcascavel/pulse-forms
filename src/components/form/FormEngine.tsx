@@ -1,10 +1,11 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FormSchema, Section, Question } from '@/types/form';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { ChevronRight, AlertCircle } from 'lucide-react';
+import { ChevronRight, AlertCircle, UploadCloud, FileVideo, Trash2, Loader2 } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 
 interface FormEngineProps {
   schema: FormSchema;
@@ -151,6 +152,16 @@ export function FormEngine({ schema }: FormEngineProps) {
 }
 
 function RenderQuestion({ question, value, onChange }: { question: Question, value: string, onChange: (val: string) => void }) {
+  if (question.type === 'video_upload') {
+    return (
+      <VideoUploadField 
+        question={question} 
+        value={value} 
+        onChange={onChange} 
+      />
+    );
+  }
+
   if (question.type === 'single_choice' && question.options) {
     return (
       <div className="w-full">
@@ -185,5 +196,145 @@ function RenderQuestion({ question, value, onChange }: { question: Question, val
       onChange={(e) => onChange(e.target.value)}
       placeholder={`Sua resposta...`}
     />
+  );
+}
+
+function VideoUploadField({ question, value, onChange }: { question: Question, value: string, onChange: (val: string) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const supabase = createClient();
+
+  useEffect(() => {
+    if (value) {
+      const parts = value.split('/');
+      setFileName(decodeURIComponent(parts[parts.length - 1]));
+    }
+  }, [value]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size limit: 50MB (52,428,800 bytes)
+    const MAX_SIZE_MB = 50;
+    const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+    if (file.size > MAX_SIZE_BYTES) {
+      setError(`O arquivo é muito grande. O limite máximo é de ${MAX_SIZE_MB} MB.`);
+      return;
+    }
+
+    // Check mime type (should be video)
+    if (!file.type.startsWith('video/')) {
+      setError('Formato inválido. Por favor, envie apenas arquivos de vídeo (MP4, MOV, etc.).');
+      return;
+    }
+
+    setError(null);
+    setUploading(true);
+    setProgress(15);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const randomPath = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+      const filePath = `video_submissions/${randomPath}`;
+
+      // Upload file directly to Supabase storage bucket 'videos'
+      const { data, error: uploadError } = await supabase.storage
+        .from('videos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('videos')
+        .getPublicUrl(filePath);
+
+      onChange(publicUrl);
+      setFileName(file.name);
+      setProgress(100);
+    } catch (err: any) {
+      console.error(err);
+      setError('Falha ao enviar o arquivo. Tente novamente.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    onChange('');
+    setFileName(null);
+    setProgress(0);
+  };
+
+  return (
+    <div className="w-full">
+      <label className="block text-sm font-medium mb-1 text-gray-200">
+        {question.label} {question.required && <span className="text-primary">*</span>}
+      </label>
+      {question.description && (
+        <p className="text-xs text-gray-400 mb-3">{question.description}</p>
+      )}
+
+      {value ? (
+        <div className="flex items-center justify-between p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 animate-in fade-in duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400">
+              <FileVideo className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-emerald-100 truncate max-w-[200px] md:max-w-xs">{fileName || 'Vídeo enviado'}</p>
+              <p className="text-xs text-emerald-400/70">✓ Upload concluído com sucesso</p>
+            </div>
+          </div>
+          <button 
+            type="button"
+            onClick={handleRemove}
+            className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ) : (
+        <div className={`relative border-2 border-dashed rounded-xl p-6 transition-all text-center ${uploading ? 'border-primary/55 bg-primary/5' : 'border-white/10 hover:border-primary/50 hover:bg-black/10'}`}>
+          {uploading ? (
+            <div className="flex flex-col items-center justify-center py-4">
+              <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
+              <p className="text-sm font-medium text-gray-200">Enviando vídeo... {progress > 15 && `${progress}%`}</p>
+              <p className="text-xs text-gray-400 mt-1">Por favor, não feche esta página.</p>
+              <div className="w-full max-w-[200px] bg-black/40 h-1.5 rounded-full mt-4 overflow-hidden border border-white/5">
+                <div className="bg-primary h-full transition-all duration-300" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center cursor-pointer py-4">
+              <UploadCloud className="w-10 h-10 text-gray-400 mb-3" />
+              <span className="text-sm font-medium text-gray-200">Clique para selecionar seu vídeo</span>
+              <span className="text-xs text-gray-400 mt-1.5">Formatos aceitos: MP4, MOV, AVI (Tamanho máximo: 50 MB)</span>
+              <input 
+                type="file" 
+                accept="video/*" 
+                onChange={handleFileChange} 
+                className="hidden" 
+              />
+            </label>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="text-xs text-red-400 mt-2 flex items-center gap-1.5 animate-in fade-in">
+          <span className="w-1 h-1 rounded-full bg-red-400" />
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
