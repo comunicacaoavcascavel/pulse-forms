@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { createFormAction, updateFormAction } from '@/app/admin/forms/actions';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { Palette, ShieldAlert, Brain } from 'lucide-react';
+import { Palette, ShieldAlert, Brain, X, Plus, Trash2, Circle, Square } from 'lucide-react';
 
 export function FormBuilder({ folders, initialData }: { folders?: any[], initialData?: any }) {
   const router = useRouter();
@@ -428,21 +428,61 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
                     </div>
                   </div>
                   
-                  {(question.type === 'single_choice' || question.type === 'multiple_choice') && (
-                    <div className="flex flex-col gap-1 mt-2">
-                      <label className="text-xs text-gray-400">Opções (separadas por vírgula)</label>
-                      <input 
-                        type="text" 
-                        value={(question.options || []).join(', ')} 
-                        onChange={e => {
-                          const opts = e.target.value.split(',').map((s:string) => s.trim()).filter(Boolean);
-                          updateQuestion(sIndex, qIndex, 'options', opts);
-                        }}
-                        placeholder="Sim, Não, Talvez"
-                        className="bg-black/50 border border-white/10 rounded-md p-2 text-white text-sm" 
-                      />
-                    </div>
-                  )}
+                  {(question.type === 'single_choice' || question.type === 'multiple_choice') && (() => {
+                    const currentOpts = question.options && question.options.length > 0 ? question.options : ['Opção 1'];
+                    return (
+                      <div className="flex flex-col gap-2.5 mt-3 pl-2">
+                        <label className="text-xs font-semibold text-gray-400">Opções da Pergunta</label>
+                        <div className="flex flex-col gap-2">
+                          {currentOpts.map((opt: string, optIndex: number) => (
+                            <div key={optIndex} className="flex items-center gap-3 group">
+                              {question.type === 'single_choice' ? (
+                                <Circle className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+                              ) : (
+                                <Square className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+                              )}
+                              
+                              <input 
+                                type="text" 
+                                value={opt} 
+                                onChange={e => {
+                                  const newOpts = [...currentOpts];
+                                  newOpts[optIndex] = e.target.value;
+                                  updateQuestion(sIndex, qIndex, 'options', newOpts);
+                                }}
+                                placeholder={`Opção ${optIndex + 1}`}
+                                className="bg-transparent border-b border-white/10 focus:border-emerald-500/50 py-1 text-white text-xs outline-none flex-1 transition-all" 
+                              />
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newOpts = currentOpts.filter((_, idx) => idx !== optIndex);
+                                  updateQuestion(sIndex, qIndex, 'options', newOpts);
+                                }}
+                                disabled={currentOpts.length <= 1}
+                                className="text-gray-500 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 disabled:opacity-0 transition-all"
+                                title="Excluir opção"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newOpts = [...currentOpts, `Opção ${currentOpts.length + 1}`];
+                            updateQuestion(sIndex, qIndex, 'options', newOpts);
+                          }}
+                          className="w-max text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors pl-6 mt-1 flex items-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" /> Adicionar Opção
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   <div className="flex items-center gap-2 mt-2">
                     <input 
