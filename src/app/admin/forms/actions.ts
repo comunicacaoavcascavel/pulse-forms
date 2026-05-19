@@ -344,7 +344,7 @@ export async function saveManualReviewAction(submissionId: string, comments: str
   return { success: true };
 }
 
-export async function createUserAction(email: string, name: string, role: string) {
+export async function createUserAction(email: string, name: string, role: string, password?: string) {
   const supabase = await createClient();
   const { data: { user: currentUser } } = await supabase.auth.getUser();
   if (!currentUser) return { success: false, error: 'Unauthorized' };
@@ -360,12 +360,10 @@ export async function createUserAction(email: string, name: string, role: string
     return { success: false, error: 'Apenas Super Admins podem gerenciar usuários.' };
   }
 
-  // Create user in Supabase Auth
-  // We can sign them up with a default password. They can reset it or log in with it.
-  const tempPassword = 'PulseForms2026!';
+  const finalPassword = password || 'PulseForms2026!';
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
-    password: tempPassword,
+    password: finalPassword,
     options: {
       data: {
         role,

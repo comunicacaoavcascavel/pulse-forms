@@ -421,7 +421,8 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
                         <option value="phone">Telefone (WhatsApp)</option>
                         <option value="date">Data</option>
                         <option value="url">URL (Link)</option>
-                        <option value="single_choice">Múltipla Escolha</option>
+                        <option value="single_choice">Seleção Única (Múltipla Escolha)</option>
+                        <option value="multiple_choice">Caixas de Seleção (Múltiplas Opções)</option>
                         <option value="video_upload">Vídeo / Link de Vídeo</option>
                       </select>
                     </div>

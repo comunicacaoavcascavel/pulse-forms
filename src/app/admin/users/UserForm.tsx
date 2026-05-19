@@ -8,29 +8,38 @@ import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 export function UserForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState('leader');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email) {
-      setStatus({ type: 'error', message: 'Por favor, preencha todos os campos.' });
+    if (!name || !email || !password) {
+      setStatus({ type: 'error', message: 'Por favor, preencha todos os campos, incluindo a senha.' });
+      return;
+    }
+    if (password.length < 6) {
+      setStatus({ type: 'error', message: 'A senha deve conter no mínimo 6 caracteres.' });
       return;
     }
 
     setLoading(true);
     setStatus(null);
 
+    // Guardar email antes de limpar
+    const targetEmail = email;
+
     try {
-      const res = await createUserAction(email, name, role);
+      const res = await createUserAction(email, name, role, password);
       if (res.success) {
         setName('');
         setEmail('');
+        setPassword('');
         setRole('leader');
         setStatus({
           type: 'success',
-          message: 'Usuário convidado com sucesso! A senha padrão de acesso é: PulseForms2026!'
+          message: `Membro cadastrado com sucesso! Já pode fornecer o e-mail (${targetEmail}) e a senha definida para o usuário acessar a plataforma.`
         });
       } else {
         setStatus({ type: 'error', message: res.error || 'Erro ao convidar usuário.' });
@@ -51,7 +60,7 @@ export function UserForm() {
           ) : (
             <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
           )}
-          <p className="leading-relaxed">{status.message}</p>
+          <p className="leading-relaxed whitespace-pre-line">{status.message}</p>
         </div>
       )}
 
@@ -69,6 +78,15 @@ export function UserForm() {
         placeholder="joao@igreja.com"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        disabled={loading}
+      />
+
+      <Input
+        label="Senha de Acesso"
+        type="text"
+        placeholder="Defina uma senha inicial (mínimo 6 chars)"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
         disabled={loading}
       />
 
@@ -98,10 +116,10 @@ export function UserForm() {
         {loading ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            Convidando...
+            Cadastrando...
           </>
         ) : (
-          'Convidar Membro'
+          'Cadastrar Membro'
         )}
       </Button>
     </form>
