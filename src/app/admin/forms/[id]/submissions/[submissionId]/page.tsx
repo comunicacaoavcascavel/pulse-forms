@@ -35,6 +35,15 @@ export default async function SubmissionDetailPage(
     .eq('submission_id', submissionId)
     .maybeSingle();
 
+  // Buscar critérios do formulário
+  const { data: form } = await supabase
+    .from('forms')
+    .select('review_criteria')
+    .eq('id', formId)
+    .single();
+
+  const reviewCriteria = form?.review_criteria || [];
+
   // Buscar as respostas com as perguntas
   const { data: answers } = await supabase
     .from('form_answers')
@@ -312,7 +321,11 @@ export default async function SubmissionDetailPage(
           )}
 
           {/* Form de Avaliação Manual */}
-          <ManualReviewForm submissionId={submissionId} initialReview={manualReview} />
+          <ManualReviewForm 
+            submissionId={submissionId} 
+            initialReview={manualReview} 
+            reviewCriteria={reviewCriteria}
+          />
         </div>
 
       </div>

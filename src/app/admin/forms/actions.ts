@@ -37,15 +37,16 @@ export async function createFormAction(payload: any) {
     return { success: false, error: 'Unauthorized' };
   }
 
-  // Insert form
   const { data: form, error: formError } = await supabase.from('forms').insert({
     title: payload.title,
     description: payload.description,
     slug: payload.slug,
+    status: payload.status,
     welcome_title: payload.welcome_title,
     welcome_text: payload.welcome_text,
     theme: payload.theme,
     folder_id: payload.folder_id,
+    review_criteria: payload.review_criteria,
     created_by: user.id,
   }).select().single();
 
@@ -152,15 +153,16 @@ export async function updateFormAction(formId: string, payload: any) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: 'Unauthorized' };
 
-  // Update form basics
   const { error: formError } = await supabase.from('forms').update({
     title: payload.title,
     description: payload.description,
     slug: payload.slug,
+    status: payload.status,
     folder_id: payload.folder_id,
     welcome_title: payload.welcome_title,
     welcome_text: payload.welcome_text,
     theme: payload.theme,
+    review_criteria: payload.review_criteria,
     updated_at: new Date().toISOString()
   }).eq('id', formId);
 

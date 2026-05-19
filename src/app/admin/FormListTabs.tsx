@@ -62,7 +62,11 @@ export function FormListTabs({ folders, formsByFolder }: FormListTabsProps) {
             <h3 className="font-semibold text-white truncate text-sm" title={form.title}>{form.title}</h3>
             <p className="text-xs text-gray-500 font-mono truncate" title={form.slug}>/{form.slug}</p>
           </div>
-          <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/20 font-medium whitespace-nowrap">ATIVO</span>
+          {form.status === 'published' ? (
+            <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/20 font-medium whitespace-nowrap">ATIVO</span>
+          ) : (
+            <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded border border-amber-500/20 font-medium whitespace-nowrap">RASCUNHO</span>
+          )}
         </div>
         
         <div className="flex items-center justify-between text-sm mt-1 relative z-10">

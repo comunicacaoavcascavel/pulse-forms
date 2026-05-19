@@ -12,12 +12,15 @@ interface ManualReviewFormProps {
   initialReview: {
     comments: string;
     recommendation: string;
+    scores?: any;
   } | null;
+  reviewCriteria: any[];
 }
 
-export function ManualReviewForm({ submissionId, initialReview }: ManualReviewFormProps) {
+export function ManualReviewForm({ submissionId, initialReview, reviewCriteria }: ManualReviewFormProps) {
   const [comments, setComments] = useState(initialReview?.comments || '');
   const [recommendation, setRecommendation] = useState(initialReview?.recommendation || 'under_review');
+  const [scores, setScores] = useState<Record<string, number>>(initialReview?.scores || {});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const router = useRouter();
@@ -26,17 +29,30 @@ export function ManualReviewForm({ submissionId, initialReview }: ManualReviewFo
     setLoading(true);
     setSuccess(false);
     
-    const res = await saveManualReviewAction(submissionId, comments, recommendation);
+    const res = await saveManualReviewAction(submissionId, comments, recommendation, scores);
     
-    setLoading(false);
     if (res.success) {
       setSuccess(true);
       router.refresh();
-      setTimeout(() => setSuccess(false), 3000);
+      setTimeout(() => {
+        setSuccess(false);
+        setLoading(false);
+      }, 2000);
     } else {
+      setLoading(false);
       alert(res.error || 'Erro ao salvar avaliação');
     }
   };
+
+  const handleScoreChange = (criterionName: string, value: number) => {
+    setScores(prev => ({
+      ...prev,
+      [criterionName]: value
+    }));
+  };
+
+  const totalGiven = Object.values(scores).reduce((a, b) => a + b, 0);
+  const maxPossible = reviewCriteria.reduce((acc, c) => acc + (c.max_score || 10), 0);
 
   const options = [
     {
@@ -72,6 +88,64 @@ export function ManualReviewForm({ submissionId, initialReview }: ManualReviewFo
           Avaliação de Liderança (Manual)
         </h3>
       </div>
+
+      {/* Dynamic Criteria Scoring */}
+      {reviewCriteria.length > 0 && (
+        <div className="flex flex-col gap-4 border-t border-purple-500/10 pt-4 mt-1">
+          <div className="flex justify-between items-center">
+            <h4 className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span>📊</span> Pontuação dos Critérios ({totalGiven} / {maxPossible} pts)
+            </h4>
+            <div className="text-[10px] text-gray-500 font-mono">
+              {maxPossible > 0 ? Math.round((totalGiven / maxPossible) * 100) : 0}% de aproveitamento
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {reviewCriteria.map((c: any) => {
+              const currentScore = scores[c.name] || 0;
+              const max = c.max_score || 10;
+              return (
+                <div key={c.name} className="p-3.5 rounded-xl border border-white/5 bg-black/20 flex flex-col gap-2.5">
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <span className="text-xs font-bold text-gray-200">{c.name}</span>
+                      {c.description && (
+                        <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{c.description}</p>
+                      )}
+                    </div>
+                    <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded font-mono">
+                      {currentScore} / {max}
+                    </span>
+                  </div>
+
+                  {/* Bubble Score controls */}
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {Array.from({ length: max }).map((_, i) => {
+                      const value = i + 1;
+                      const isSelected = currentScore === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => handleScoreChange(c.name, value)}
+                          className={`w-7 h-7 rounded-lg text-[10px] font-bold font-mono transition-all flex items-center justify-center border ${
+                            isSelected
+                              ? 'bg-amber-500 border-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.3)] scale-105'
+                              : 'bg-black/40 border-white/5 text-gray-400 hover:border-amber-500/30 hover:text-amber-400'
+                          }`}
+                        >
+                          {value}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         <label className="text-xs text-gray-400 font-medium">Recomendação da Liderança</label>

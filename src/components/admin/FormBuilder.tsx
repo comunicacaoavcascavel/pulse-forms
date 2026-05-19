@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { createFormAction, updateFormAction } from '@/app/admin/forms/actions';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { Palette, ShieldAlert, Brain, X, Plus, Trash2, Circle, Square } from 'lucide-react';
+import { Palette, ShieldAlert, Brain, X, Plus, Trash2, Circle, Square, Award } from 'lucide-react';
 
 export function FormBuilder({ folders, initialData }: { folders?: any[], initialData?: any }) {
   const router = useRouter();
@@ -45,6 +45,7 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
   const [title, setTitle] = useState(initialData?.title || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [slug, setSlug] = useState(initialData?.slug || '');
+  const [status, setStatus] = useState(initialData?.status || 'draft');
   const [slugTouched, setSlugTouched] = useState(!!initialData);
   const [welcomeTitle, setWelcomeTitle] = useState(initialData?.welcome_title || '');
   const [welcomeText, setWelcomeText] = useState(initialData?.welcome_text || '');
@@ -56,6 +57,10 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
   // Rules State
   const [rules, setRules] = useState<any[]>(initialData?.rules || []);
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
+
+  // Manual Review Criteria State
+  const [reviewCriteria, setReviewCriteria] = useState<any[]>(initialData?.review_criteria || []);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
   // Theme State
   const defaultTheme = { primaryColor: '#10b981', backgroundType: 'gradient', backgroundGradient: 'linear-gradient(to bottom right, #020617, #064e3b)', backgroundColor: '#000000' };
@@ -226,13 +231,15 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
       title,
       description,
       slug,
+      status,
       folder_id: folderId || null,
       welcome_title: welcomeTitle,
       welcome_text: welcomeText,
       theme,
       sections,
       rules,
-      aiRules
+      aiRules,
+      review_criteria: reviewCriteria
     };
 
     const res = initialData?.id 
@@ -255,7 +262,23 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
       <Card glow className="p-6 flex flex-col gap-4">
         <div className="flex justify-between items-center border-b border-white/10 pb-4 mb-2">
           <h2 className="text-xl font-bold text-emerald-400">Informações Básicas</h2>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
+            {/* Status Select Box */}
+            <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 rounded-xl px-2.5 py-1">
+              <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Status:</span>
+              <select
+                value={status}
+                onChange={e => setStatus(e.target.value)}
+                className={`bg-transparent text-xs font-bold outline-none border-none cursor-pointer focus:ring-0 ${
+                  status === 'published' ? 'text-emerald-400' : 'text-amber-400'
+                }`}
+              >
+                <option value="draft" className="bg-zinc-900 text-amber-400 font-bold">Rascunho (Offline)</option>
+                <option value="published" className="bg-zinc-900 text-emerald-400 font-bold">Público (No Ar)</option>
+              </select>
+            </div>
+            
+            <div className="flex gap-2">
             <button
               onClick={() => setIsThemeModalOpen(true)}
               title="Personalizar Aparência"
@@ -287,8 +310,21 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setIsReviewModalOpen(true)}
+              title="Critérios de Avaliação Manual (Liderança)"
+              className="relative p-2 rounded-lg bg-white/5 hover:bg-amber-500/20 text-gray-400 hover:text-amber-400 transition-colors border border-white/5 hover:border-amber-500/30"
+            >
+              <Award size={16} />
+              {reviewCriteria.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-500 rounded-full text-[9px] text-black flex items-center justify-center font-bold">
+                  {reviewCriteria.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
+      </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
@@ -902,6 +938,129 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
             
             <div className="p-4 border-t border-white/10 bg-black/40 flex justify-end">
               <Button variant="primary" onClick={() => setIsAiModalOpen(false)}>Concluído</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {isReviewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <Card glow className="w-full max-w-2xl bg-[#090d0b] border-amber-500/20 flex flex-col max-h-[90vh] shadow-2xl relative">
+            <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/40">
+              <div>
+                <h3 className="text-lg font-bold text-amber-400 flex items-center gap-2">
+                  <Award className="w-5 h-5 shrink-0" />
+                  Critérios de Avaliação Manual (Liderança)
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  Defina os critérios e notas que a banca examinadora avaliará manualmente para cada candidato.
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsReviewModalOpen(false)}
+                className="text-gray-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
+                {reviewCriteria.length === 0 ? (
+                  <div className="text-center py-10 border border-dashed border-white/10 rounded-xl bg-white/[0.01]">
+                    <span className="text-3xl block mb-2">📋</span>
+                    <p className="text-sm font-semibold text-gray-300">Sem Critérios Definidos</p>
+                    <p className="text-xs text-gray-500 max-w-md mx-auto mt-1 leading-relaxed">
+                      Você pode cadastrar critérios específicos (ex: Afinação Vocal, Técnica Instrumental, Presença de Palco) para que a banca possa dar notas individuais durante a audição.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3.5">
+                    {reviewCriteria.map((criterion: any, index: number) => (
+                      <div key={index} className="p-4 rounded-xl border border-white/5 bg-white/[0.01] flex flex-col gap-3 relative group">
+                        <button 
+                          onClick={() => {
+                            setReviewCriteria(reviewCriteria.filter((_, idx) => idx !== index));
+                          }}
+                          className="absolute top-4 right-4 text-gray-500 hover:text-red-400 text-xs transition-colors p-1"
+                          title="Remover Critério"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="col-span-2 flex flex-col gap-1">
+                            <label className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Nome do Critério</label>
+                            <input 
+                              type="text"
+                              value={criterion.name}
+                              onChange={e => {
+                                const updated = [...reviewCriteria];
+                                updated[index].name = e.target.value;
+                                setReviewCriteria(updated);
+                              }}
+                              placeholder="Ex: Afinação Vocal"
+                              className="bg-black/50 border border-white/10 rounded-md p-2 text-white text-xs outline-none focus:border-amber-500/50"
+                            />
+                          </div>
+                          
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Nota Máxima</label>
+                            <select
+                              value={criterion.max_score || 10}
+                              onChange={e => {
+                                const updated = [...reviewCriteria];
+                                updated[index].max_score = Number(e.target.value);
+                                setReviewCriteria(updated);
+                              }}
+                              className="bg-black/50 border border-white/10 rounded-md p-2 text-white text-xs outline-none focus:border-amber-500/50 cursor-pointer"
+                            >
+                              <option value={5}>5 Pontos</option>
+                              <option value={10}>10 Pontos</option>
+                              <option value={20}>20 Pontos</option>
+                              <option value={50}>50 Pontos</option>
+                            </select>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Instruções para o Avaliador (Opcional)</label>
+                          <input 
+                            type="text"
+                            value={criterion.description || ''}
+                            onChange={e => {
+                              const updated = [...reviewCriteria];
+                              updated[index].description = e.target.value;
+                              setReviewCriteria(updated);
+                            }}
+                            placeholder="Descreva o que a banca deve observar ao pontuar este critério..."
+                            className="bg-black/50 border border-white/10 rounded-md p-2 text-white text-xs outline-none focus:border-amber-500/50"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setReviewCriteria([
+                    ...reviewCriteria,
+                    { name: 'Novo Critério', description: '', max_score: 10 }
+                  ]);
+                }}
+                className="w-full py-2.5 border border-dashed border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-bold rounded-xl transition-all text-xs flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" /> Adicionar Critério de Avaliação
+              </button>
+            </div>
+            
+            <div className="p-4 border-t border-white/10 bg-black/40 flex justify-end">
+              <Button variant="primary" onClick={() => setIsReviewModalOpen(false)} className="bg-amber-500 hover:bg-amber-600 text-black border-none font-bold text-xs px-4 h-9">
+                Concluído
+              </Button>
             </div>
           </Card>
         </div>
