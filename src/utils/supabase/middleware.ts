@@ -7,7 +7,26 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
-  const { url, anonKey } = getSupabasePublicConfig()
+  const pathname = request.nextUrl.pathname;
+  const protectedRoute = pathname.startsWith('/owner')
+    || pathname.startsWith('/tenants')
+    || pathname.startsWith('/admin')
+    || /^\/t\/[^/]+\/admin(?:\/|$)/.test(pathname);
+
+  let url: string;
+  let anonKey: string;
+  try {
+    ({ url, anonKey } = getSupabasePublicConfig());
+  } catch {
+    if (protectedRoute && !pathname.startsWith('/admin/login') && pathname !== '/login') {
+      const redirectUrl = request.nextUrl.clone()
+      redirectUrl.pathname = '/login'
+      redirectUrl.searchParams.set('next', pathname)
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    return supabaseResponse
+  }
 
   const supabase = createServerClient(
     url,
@@ -33,12 +52,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const pathname = request.nextUrl.pathname;
-  const protectedRoute = pathname.startsWith('/owner')
-    || pathname.startsWith('/tenants')
-    || pathname.startsWith('/admin')
-    || /^\/t\/[^/]+\/admin(?:\/|$)/.test(pathname);
 
   if (!user && protectedRoute && !pathname.startsWith('/admin/login') && pathname !== '/login') {
     const url = request.nextUrl.clone()
