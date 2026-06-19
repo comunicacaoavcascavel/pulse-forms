@@ -25,6 +25,8 @@ FORMS_ZALEN_BASE_URL=https://forms.zalen.tech
 FORMS_ZALEN_PLATFORM_OWNER_EMAILS=
 ```
 
+Na Vercel, cadastre essas mesmas variáveis em **Project Settings → Environment Variables** para **Production** e **Preview**. A `NEXT_PUBLIC_SUPABASE_URL` deve ser a URL raiz do projeto Supabase, por exemplo `https://whpybudqsyovurgngtlj.supabase.co`, sem `/rest/v1/` no final.
+
 `SUPABASE_SERVICE_ROLE_KEY` e `TENANT_SECRET_ENCRYPTION_KEY` são server-only. Nunca use prefixo `NEXT_PUBLIC_` nelas.
 
 ## Banco

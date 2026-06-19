@@ -15,17 +15,25 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
     setError('');
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    let signInError;
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      signInError = error;
+    } catch {
+      setError('Supabase nao esta configurado neste ambiente. Verifique as variaveis da Vercel.');
+      setLoading(false);
+      return;
+    }
 
     if (signInError) {
       setError('E-mail ou senha incorretos. Verifique suas credenciais.');

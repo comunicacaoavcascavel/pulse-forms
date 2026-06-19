@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseProjectUrl } from './config';
 
 function isLegacyServiceRoleJwt(key: string) {
   const [, payload] = key.split('.');
@@ -29,7 +30,7 @@ export function hasServiceRoleKey() {
 }
 
 export function createAdminClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = getSupabaseProjectUrl();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !isValidServiceRoleKey(serviceRoleKey)) {
