@@ -5,11 +5,11 @@ import { Input } from '@/components/ui/Input';
 import { createUserAction } from '../forms/actions';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
-export function UserForm() {
+export function UserForm({ tenantId, tenantSlug }: { tenantId: string; tenantSlug: string }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('leader');
+  const [role, setRole] = useState('editor');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -31,12 +31,12 @@ export function UserForm() {
     const targetEmail = email;
 
     try {
-      const res = await createUserAction(email, name, role, password);
+      const res = await createUserAction(tenantId, email, name, role as any, password, tenantSlug);
       if (res.success) {
         setName('');
         setEmail('');
         setPassword('');
-        setRole('leader');
+        setRole('editor');
         setStatus({
           type: 'success',
           message: `Membro cadastrado com sucesso! Já pode fornecer o e-mail (${targetEmail}) e a senha definida para o usuário acessar a plataforma.`
@@ -44,7 +44,7 @@ export function UserForm() {
       } else {
         setStatus({ type: 'error', message: res.error || 'Erro ao convidar usuário.' });
       }
-    } catch (err: any) {
+    } catch {
       setStatus({ type: 'error', message: 'Houve um erro imprevisto ao processar.' });
     } finally {
       setLoading(false);
@@ -100,10 +100,10 @@ export function UserForm() {
           disabled={loading}
           className="w-full h-11 rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-gray-100 placeholder-gray-500 transition-all focus:border-primary focus:bg-black/40 focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="leader">Líder de Louvor (Cria forms, avalia)</option>
-          <option value="reviewer">Membro da Banca (Visualiza, avalia)</option>
-          <option value="pastor">Pastor de Louvor (Apenas visualização)</option>
-          <option value="super_admin">Super Administrador (Controle Total)</option>
+          <option value="owner">Dono do tenant</option>
+          <option value="admin">Administrador</option>
+          <option value="editor">Editor de formulários</option>
+          <option value="reviewer">Revisor / banca</option>
         </select>
       </div>
 

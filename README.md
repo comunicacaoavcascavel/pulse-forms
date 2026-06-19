@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Forms Zalen
 
-## Getting Started
+MVP SaaS multi-tenant para formulários, respostas, revisão e avaliação por IA. A Pulse Igreja nasce como primeiro tenant (`pulse`) e os formulários existentes foram preservados nesse contexto.
 
-First, run the development server:
+## Rotas principais
+
+- `/login`: login único da plataforma.
+- `/owner`: painel geral Zalen para visualizar/criar tenants.
+- `/tenants`: seletor de tenants do usuário.
+- `/t/[tenantSlug]/admin`: painel administrativo do tenant.
+- `/t/[tenantSlug]/admin/settings/ai`: configuração de IA por tenant.
+- `/t/[tenantSlug]/f/[formSlug]`: link público de coleta.
+- `/f/[slug]`: redirect legado para `/t/pulse/f/[slug]`.
+
+## Variáveis de ambiente
+
+Copie `.env.example` para `.env.local` e preencha:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+TENANT_SECRET_ENCRYPTION_KEY=
+FORMS_ZALEN_BASE_URL=https://forms.zalen.tech
+FORMS_ZALEN_PLATFORM_OWNER_EMAILS=
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`SUPABASE_SERVICE_ROLE_KEY` e `TENANT_SECRET_ENCRYPTION_KEY` são server-only. Nunca use prefixo `NEXT_PUBLIC_` nelas.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Banco
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+As migrações em `supabase/migrations` criam:
 
-## Learn More
+- `tenants`, `tenant_memberships` e `tenant_ai_settings`.
+- `tenant_id` nas tabelas operacionais.
+- tenant inicial `pulse`.
+- RLS tenant-aware, sem autorização baseada em `user_metadata`.
+- storage separado por caminhos `tenants/{tenant}/...`.
 
-To learn more about Next.js, take a look at the following resources:
+## Desenvolvimento
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+npm run dev
+npm run lint
+npx next build --webpack
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+O build com `--webpack` evita falhas de Turbopack em ambientes locais que bloqueiam portas internas.

@@ -1,9 +1,19 @@
 'use client';
 import React, { useState } from 'react';
 import { updateUserRoleAction, deleteUserAction } from '../forms/actions';
-import { Trash2, Loader2, UserCheck, ShieldAlert } from 'lucide-react';
+import { Trash2, Loader2 } from 'lucide-react';
 
-export function UserRow({ profile, currentUserId }: { profile: any; currentUserId: string }) {
+export function UserRow({
+  profile,
+  currentUserId,
+  tenantId,
+  tenantSlug,
+}: {
+  profile: any;
+  currentUserId: string;
+  tenantId: string;
+  tenantSlug: string;
+}) {
   const [updating, setUpdating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const isMe = profile.id === currentUserId;
@@ -11,11 +21,11 @@ export function UserRow({ profile, currentUserId }: { profile: any; currentUserI
   const handleRoleChange = async (newRole: string) => {
     setUpdating(true);
     try {
-      const res = await updateUserRoleAction(profile.id, newRole);
+      const res = await updateUserRoleAction(tenantId, profile.id, newRole as any, tenantSlug);
       if (!res.success) {
         alert(res.error || 'Erro ao alterar nível de acesso.');
       }
-    } catch (err) {
+    } catch {
       alert('Erro de conexão ao alterar nível de acesso.');
     } finally {
       setUpdating(false);
@@ -34,11 +44,11 @@ export function UserRow({ profile, currentUserId }: { profile: any; currentUserI
 
     setDeleting(true);
     try {
-      const res = await deleteUserAction(profile.id);
+      const res = await deleteUserAction(tenantId, profile.id, tenantSlug);
       if (!res.success) {
         alert(res.error || 'Erro ao remover membro.');
       }
-    } catch (err) {
+    } catch {
       alert('Erro de conexão ao remover membro.');
     } finally {
       setDeleting(false);
@@ -47,9 +57,9 @@ export function UserRow({ profile, currentUserId }: { profile: any; currentUserI
 
   const getRoleBadge = (role: string) => {
     switch (role) {
-      case 'super_admin':
+      case 'owner':
         return 'text-red-400 bg-red-500/10 border-red-500/20';
-      case 'pastor':
+      case 'admin':
         return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
       case 'reviewer':
         return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
@@ -60,14 +70,14 @@ export function UserRow({ profile, currentUserId }: { profile: any; currentUserI
 
   const getRoleLabel = (role: string) => {
     switch (role) {
-      case 'super_admin':
-        return 'Super Admin';
-      case 'pastor':
-        return 'Pastor';
+      case 'owner':
+        return 'Dono';
+      case 'admin':
+        return 'Admin';
       case 'reviewer':
         return 'Banca';
       default:
-        return 'Líder';
+        return 'Editor';
     }
   };
 
@@ -87,6 +97,9 @@ export function UserRow({ profile, currentUserId }: { profile: any; currentUserI
             )}
           </div>
           <span className="text-xs text-gray-400 block truncate">{profile.email}</span>
+          <span className={`inline-flex mt-2 text-[10px] font-medium px-2 py-0.5 rounded-full border ${getRoleBadge(profile.role)}`}>
+            {getRoleLabel(profile.role)}
+          </span>
         </div>
       </div>
 
@@ -100,10 +113,10 @@ export function UserRow({ profile, currentUserId }: { profile: any; currentUserI
             disabled={updating || deleting || isMe}
             className="bg-black/20 border border-white/10 rounded-lg text-xs py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-primary text-gray-300 disabled:opacity-50"
           >
-            <option value="leader">Líder</option>
+            <option value="owner">Dono</option>
+            <option value="admin">Admin</option>
+            <option value="editor">Editor</option>
             <option value="reviewer">Banca</option>
-            <option value="pastor">Pastor</option>
-            <option value="super_admin">Super Admin</option>
           </select>
         )}
 

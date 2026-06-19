@@ -2,11 +2,11 @@
 import { Link as LinkIcon, Check } from 'lucide-react';
 import { useState } from 'react';
 
-export function CopyButton({ slug }: { slug: string }) {
+export function CopyButton({ slug, tenantSlug }: { slug: string; tenantSlug: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    const fullUrl = `${window.location.origin}/f/${slug}`;
+    const fullUrl = `${window.location.origin}/t/${tenantSlug}/f/${slug}`;
     navigator.clipboard.writeText(fullUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -22,4 +22,3 @@ export function CopyButton({ slug }: { slug: string }) {
     </button>
   );
 }
-

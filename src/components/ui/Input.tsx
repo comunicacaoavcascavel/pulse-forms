@@ -14,7 +14,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         </label>
         <input
           ref={ref}
-          className={`w-full bg-[var(--input)] border border-border text-white rounded-xl px-4 py-3 text-sm transition-all focus:outline-none focus:border-primary focus:shadow-[0_0_0_1px_var(--ring)] ${className}`}
+          className={`w-full bg-[var(--input)] border border-border text-white rounded-xl px-4 py-3 text-sm transition-all placeholder:text-slate-500 focus:outline-none focus:border-primary focus:bg-black/30 focus:shadow-[0_0_0_1px_var(--ring)] ${className}`}
           {...props}
         />
         {tip && <p className="text-xs text-muted mt-2">{tip}</p>}

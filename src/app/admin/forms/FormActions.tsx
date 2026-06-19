@@ -4,19 +4,19 @@ import { deleteFormAction } from './actions';
 import { useRouter } from 'next/navigation';
 import { Pencil, Trash2 } from 'lucide-react';
 
-export function FormActions({ formId }: { formId: string }) {
+export function FormActions({ formId, tenantId, tenantSlug }: { formId: string; tenantId: string; tenantSlug: string }) {
   const router = useRouter();
 
   const handleDelete = async () => {
     if (confirm('Tem certeza que deseja excluir este formulário?')) {
-      await deleteFormAction(formId);
+      await deleteFormAction(formId, tenantId, tenantSlug);
     }
   };
 
   return (
     <div className="flex gap-2">
       <button 
-        onClick={() => router.push(`/admin/forms/${formId}/edit`)}
+        onClick={() => router.push(`/t/${tenantSlug}/admin/forms/${formId}/edit`)}
         className="p-2 rounded-lg bg-white/5 hover:bg-emerald-500/20 text-gray-400 hover:text-emerald-400 transition-colors border border-white/5 hover:border-emerald-500/30"
         title="Editar"
       >

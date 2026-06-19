@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { createFolderAction } from './forms/actions';
 
-export function FolderCreator() {
+export function FolderCreator({ tenantId, tenantSlug }: { tenantId: string; tenantSlug: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -12,7 +12,7 @@ export function FolderCreator() {
   const handleCreate = async () => {
     if (!name) return;
     setLoading(true);
-    const res = await createFolderAction(name);
+    const res = await createFolderAction(name, tenantId, tenantSlug);
     setLoading(false);
     if (res.success) {
       setIsOpen(false);
