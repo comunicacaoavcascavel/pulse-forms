@@ -1,23 +1,26 @@
 import React from 'react';
+import type { Metadata } from 'next';
 import { createClient } from '@/utils/supabase/server';
 import { FormEngine } from '@/components/form/FormEngine';
 import { FormSchema } from '@/types/form';
+import { absoluteUrl, trimForMeta } from '@/lib/share';
 import { notFound } from 'next/navigation';
 
-export default async function TenantPublicFormPage(
-  props: { params: Promise<{ tenantSlug: string; formSlug: string }> },
-) {
-  const { tenantSlug, formSlug } = await props.params;
+type PublicFormPageProps = {
+  params: Promise<{ tenantSlug: string; formSlug: string }>;
+};
+
+async function getPublishedForm(tenantSlug: string, formSlug: string) {
   const supabase = await createClient();
 
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('id, slug, status')
+    .select('id, slug, name, status')
     .eq('slug', tenantSlug)
     .eq('status', 'active')
     .single();
 
-  if (!tenant) return notFound();
+  if (!tenant) return null;
 
   const { data: form, error: formErr } = await supabase
     .from('forms')
@@ -27,9 +30,74 @@ export default async function TenantPublicFormPage(
     .eq('status', 'published')
     .single();
 
-  if (formErr || !form) {
+  if (formErr || !form) return null;
+
+  return { tenant, form };
+}
+
+export async function generateMetadata({ params }: PublicFormPageProps): Promise<Metadata> {
+  const { tenantSlug, formSlug } = await params;
+  const data = await getPublishedForm(tenantSlug, formSlug);
+
+  if (!data) {
+    return {
+      title: 'Formulário indisponível | Forms Zalen',
+      description: 'Este formulário não está disponível no momento.',
+    };
+  }
+
+  const title = data.form.title || 'Formulário';
+  const description = trimForMeta(
+    data.form.description || data.form.welcome_text,
+    `Formulário de ${data.tenant.name || 'Forms Zalen'}.`,
+  );
+  const publicPath = `/t/${tenantSlug}/f/${formSlug}`;
+  const imageUrl = absoluteUrl(`/api/og/form?tenant=${encodeURIComponent(tenantSlug)}&form=${encodeURIComponent(formSlug)}`);
+
+  return {
+    title: `${title} | Forms Zalen`,
+    description,
+    alternates: {
+      canonical: publicPath,
+    },
+    openGraph: {
+      title,
+      description,
+      url: publicPath,
+      siteName: 'Forms Zalen',
+      locale: 'pt_BR',
+      type: 'website',
+      images: [
+        {
+          url: imageUrl,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
+  };
+}
+
+export default async function TenantPublicFormPage(
+  props: PublicFormPageProps,
+) {
+  const { tenantSlug, formSlug } = await props.params;
+  const supabase = await createClient();
+
+  const publishedForm = await getPublishedForm(tenantSlug, formSlug);
+
+  if (!publishedForm) {
     return notFound();
   }
+
+  const { tenant, form } = publishedForm;
 
   const { data: sectionsData, error: secErr } = await supabase
     .from('form_sections')
