@@ -12,5 +12,5 @@ export function isAiProvider(value: string): value is AiProvider {
 
 export function isFreeOpenRouterModel(model: string) {
   return model === aiProviders.openrouter.defaultModel
-    || /^[\w.-]+\/[\w.-]+:free$/.test(model);
+    || (/^[\w.-]+\/[\w.-]+:free$/.test(model) && !model.startsWith('perplexity/pplx-decider-'));
 }

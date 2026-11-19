@@ -24,7 +24,7 @@ export async function saveTenantAiSettingsAction(tenantSlug: string, formData: F
 
   const selectedModel = model || aiProviders[provider].defaultModel;
   if (provider === 'openrouter' && !isFreeOpenRouterModel(selectedModel)) {
-    throw new Error('Escolha openrouter/free ou um modelo com sufixo :free.');
+    throw new Error('Escolha openrouter/free ou um modelo gratuito de chat que aceite respostas em JSON.');
   }
 
   const admin = createAdminClient();
