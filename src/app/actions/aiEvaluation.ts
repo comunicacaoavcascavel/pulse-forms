@@ -1,9 +1,9 @@
-'use server';
+import 'server-only';
 
 import { createAdminClient } from '@/utils/supabase/admin';
 import { decryptSecret } from '@/lib/secretCrypto';
+import { aiProviders, isFreeOpenRouterModel, type AiProvider } from '@/lib/aiProviders';
 
-type AiProvider = 'gemini' | 'openai';
 
 type AiSettings = {
   provider: AiProvider;
@@ -117,10 +117,14 @@ ${formattedAnswersText}
 Faça a análise completa e responda apenas o JSON.`;
 
   let evaluationResult: any = null;
+  const { provider } = aiSettings;
+  const model = aiSettings.model || aiProviders[provider].defaultModel;
+  if (provider === 'openrouter' && !isFreeOpenRouterModel(model)) {
+    return { success: false, error: 'O modelo do OpenRouter precisa ser gratuito.' };
+  }
 
   try {
-    if (aiSettings.provider === 'gemini') {
-      const model = aiSettings.model || 'gemini-1.5-flash';
+    if (provider === 'gemini') {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
@@ -132,13 +136,17 @@ Faça a análise completa e responda apenas o JSON.`;
           }),
         },
       );
+      if (!response.ok) throw new Error(`Gemini HTTP ${response.status}`);
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (text) evaluationResult = JSON.parse(text);
     } else {
-      const model = aiSettings.model || 'gpt-4o-mini';
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const endpoint = provider === 'openrouter'
+        ? 'https://openrouter.ai/api/v1/chat/completions'
+        : 'https://api.openai.com/v1/chat/completions';
+      const response = await fetch(endpoint, {
         method: 'POST',
+        signal: AbortSignal.timeout(20000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
@@ -150,8 +158,12 @@ Faça a análise completa e responda apenas o JSON.`;
             { role: 'user', content: userPrompt },
           ],
           response_format: { type: 'json_object' },
+          ...(provider === 'openrouter' && {
+            provider: { require_parameters: true, data_collection: 'deny' },
+          }),
         }),
       });
+      if (!response.ok) throw new Error(`AI provider HTTP ${response.status}`);
       const data = await response.json();
       const text = data.choices?.[0]?.message?.content;
       if (text) evaluationResult = JSON.parse(text);

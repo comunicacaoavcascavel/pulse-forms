@@ -4,7 +4,9 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { createAdminClient, hasServiceRoleKey } from '@/utils/supabase/admin';
 import { maskSecret } from '@/lib/secretCrypto';
+import { isAiProvider } from '@/lib/aiProviders';
 import { requireTenantManager, tenantAdminPath } from '@/lib/tenancy';
+import { AiProviderFields } from './AiProviderFields';
 import { saveTenantAiSettingsAction } from './actions';
 
 export default async function TenantAiSettingsPage(props: { params: Promise<{ tenantSlug: string }> }) {
@@ -48,23 +50,17 @@ export default async function TenantAiSettingsPage(props: { params: Promise<{ te
               Ativar avaliação por IA neste tenant
             </label>
 
-            <div>
-              <label className="block text-sm font-medium mb-1.5 text-gray-200">Provider</label>
-              <select name="provider" defaultValue={settings?.provider || 'openai'} className="w-full h-11 rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-gray-100">
-                <option value="openai">OpenAI</option>
-                <option value="gemini">Gemini</option>
-              </select>
-            </div>
+            <AiProviderFields
+              key={settings?.updated_at}
+              initialProvider={settings && isAiProvider(settings.provider) ? settings.provider : 'openai'}
+              initialModel={settings?.model}
+            />
 
             <div>
-              <label className="block text-sm font-medium mb-1.5 text-gray-200">Modelo</label>
-              <input name="model" defaultValue={settings?.model || 'gpt-4o-mini'} className="w-full h-11 rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-gray-100" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1.5 text-gray-200">API key</label>
-              <input name="apiKey" type="password" placeholder="Cole uma nova chave para substituir" className="w-full h-11 rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-gray-100" />
+              <label htmlFor="ai-key" className="block text-sm font-medium mb-1.5 text-gray-200">Chave de API</label>
+              <input id="ai-key" name="apiKey" type="password" autoComplete="off" placeholder="Informe uma nova chave ao trocar de provedor" className="w-full h-11 rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-gray-100" />
               <p className="text-xs text-muted mt-2">{maskSecret(settings?.encrypted_api_key)}</p>
+              <p className="text-xs text-muted mt-2">Ao ativar a avaliação, as respostas são enviadas ao provedor selecionado.</p>
             </div>
 
             <Button type="submit" variant="primary" className="w-full">
