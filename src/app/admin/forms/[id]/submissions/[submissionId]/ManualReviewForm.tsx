@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation';
 
 interface ManualReviewFormProps {
   submissionId: string;
+  tenantId: string;
+  tenantSlug: string;
   initialReview: {
     comments: string;
     recommendation: string;
@@ -17,7 +19,7 @@ interface ManualReviewFormProps {
   reviewCriteria: any[];
 }
 
-export function ManualReviewForm({ submissionId, initialReview, reviewCriteria }: ManualReviewFormProps) {
+export function ManualReviewForm({ submissionId, tenantId, tenantSlug, initialReview, reviewCriteria }: ManualReviewFormProps) {
   const [comments, setComments] = useState(initialReview?.comments || '');
   const [recommendation, setRecommendation] = useState(initialReview?.recommendation || 'under_review');
   const [scores, setScores] = useState<Record<string, number>>(initialReview?.scores || {});
@@ -29,7 +31,7 @@ export function ManualReviewForm({ submissionId, initialReview, reviewCriteria }
     setLoading(true);
     setSuccess(false);
     
-    const res = await saveManualReviewAction(submissionId, comments, recommendation, scores);
+    const res = await saveManualReviewAction(submissionId, comments, recommendation, scores, tenantId, tenantSlug);
     
     if (res.success) {
       setSuccess(true);

@@ -5,15 +5,36 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ChevronRight, AlertCircle, UploadCloud, FileVideo, Trash2, Loader2 } from 'lucide-react';
-import { createClient } from '@/utils/supabase/client';
 import { submitFormAction } from '@/app/actions/submitForm';
 
 interface FormEngineProps {
   schema: FormSchema;
   primaryColor?: string;
+  tenantSlug: string;
 }
 
-export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps) {
+function hexToRgb(hex: string) {
+  const cleanHex = hex.replace('#', '').trim();
+  const normalizedHex = cleanHex.length === 3
+    ? cleanHex.split('').map((char) => char + char).join('')
+    : cleanHex;
+  const value = Number.parseInt(normalizedHex, 16);
+
+  if (Number.isNaN(value)) return { r: 16, g: 185, b: 129 };
+
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  };
+}
+
+function colorWithAlpha(hex: string, alpha: number) {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+export function FormEngine({ schema, primaryColor = '#10b981', tenantSlug }: FormEngineProps) {
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
@@ -24,6 +45,13 @@ export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps
 
   const currentSection = schema.sections[currentSectionIndex];
   const isLastSection = currentSectionIndex === schema.sections.length - 1;
+  const themeVars = {
+    '--form-primary': primaryColor,
+    '--form-primary-faint': colorWithAlpha(primaryColor, 0.1),
+    '--form-primary-soft': colorWithAlpha(primaryColor, 0.2),
+    '--form-primary-muted': colorWithAlpha(primaryColor, 0.45),
+    '--form-primary-glow': colorWithAlpha(primaryColor, 0.35),
+  } as React.CSSProperties;
 
   const handleInputChange = (questionKey: string, value: string) => {
     setAnswers(prev => ({ ...prev, [questionKey]: value }));
@@ -78,7 +106,7 @@ export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps
 
   if (showWelcome && schema.welcome_text) {
     return (
-      <div className="max-w-2xl w-full mx-auto mt-12 mb-20 px-6 z-10">
+      <div className="max-w-2xl w-full mx-auto mt-12 mb-20 px-6 z-10" style={themeVars}>
         <div className="text-center mb-10 animate-in fade-in slide-in-from-top-4 duration-500">
           <div 
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-black border shadow-glow-inner mb-6"
@@ -113,7 +141,7 @@ export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps
         </div>
 
         <Card glow className="p-8 md:p-12 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 border border-white/5 bg-black/40">
-           <div className="absolute top-4 right-4 w-6 h-6 bg-primary rounded-full blur-xl opacity-60"></div>
+           <div className="absolute top-4 right-4 w-6 h-6 rounded-full blur-xl opacity-60" style={{ backgroundColor: primaryColor }}></div>
 
           <h2 className="text-2xl font-bold mb-6 text-center text-white">{schema.welcome_title || 'Bem-vindo(a) ao processo!'}</h2>
           
@@ -123,8 +151,8 @@ export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps
             ))}
             
             {schema.welcome_disclaimer && (
-              <div className="bg-black/30 border border-primary/20 rounded-xl p-5 flex gap-4 mt-6 items-start shadow-glow-inner">
-                <svg className="w-6 h-6 text-primary flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+              <div className="bg-black/30 rounded-xl p-5 flex gap-4 mt-6 items-start shadow-glow-inner" style={{ border: `1px solid ${colorWithAlpha(primaryColor, 0.25)}` }}>
+                <svg className="w-6 h-6 flex-shrink-0 mt-0.5" style={{ color: primaryColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                 <div>
                   <h4 className="font-semibold text-gray-200 text-sm mb-1">Aviso de Sigilo Ministerial</h4>
                   <p className="text-sm text-gray-400 leading-relaxed">
@@ -148,7 +176,7 @@ export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps
         </Card>
         
         <p className="text-center text-muted text-sm mt-8">
-          Pulse Forms &copy; 2026. Todos os direitos reservados.
+              Forms Zalen &copy; 2026. Todos os direitos reservados.
         </p>
       </div>
     );
@@ -156,15 +184,15 @@ export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps
 
   if (submissionId) {
     return (
-      <Card glow className="text-center p-8 max-w-xl mx-auto mt-16 border-emerald-900/50 shadow-[0_0_30px_rgba(16,185,129,0.15)]">
-        <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-           <span className="text-emerald-400 text-3xl">✓</span>
+      <Card glow className="text-center p-8 max-w-xl mx-auto mt-16" style={{ ...themeVars, borderColor: colorWithAlpha(primaryColor, 0.35), boxShadow: `0 0 30px ${colorWithAlpha(primaryColor, 0.16)}` }}>
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: colorWithAlpha(primaryColor, 0.18), border: `1px solid ${colorWithAlpha(primaryColor, 0.5)}`, boxShadow: `0 0 15px ${colorWithAlpha(primaryColor, 0.3)}` }}>
+           <span className="text-3xl" style={{ color: primaryColor }}>✓</span>
         </div>
-        <h2 className="text-2xl font-bold mb-4 text-emerald-50">Inscrição Concluída!</h2>
+        <h2 className="text-2xl font-bold mb-4 text-white">Inscrição Concluída!</h2>
         <p className="text-gray-300 mb-2">Sua resposta foi gravada com sucesso e enviada para nossa liderança.</p>
         <div className="mt-8 p-4 bg-black/40 rounded-xl border border-white/5">
            <p className="text-muted text-sm mb-1 uppercase tracking-wider">Número de Protocolo</p>
-           <p className="text-emerald-400 font-mono text-xl">{submissionId}</p>
+           <p className="font-mono text-xl" style={{ color: primaryColor }}>{submissionId}</p>
         </div>
       </Card>
     );
@@ -182,14 +210,14 @@ export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps
   }
 
   return (
-    <div className="max-w-3xl mx-auto mt-12 mb-20 px-6">
+    <div className="max-w-3xl mx-auto mt-12 mb-20 px-6" style={themeVars}>
       {/* Progress */}
       <div className="flex items-center justify-between mb-8">
-        <div className="text-sm text-primary font-semibold tracking-wider uppercase">
+        <div className="text-sm font-semibold tracking-wider uppercase" style={{ color: primaryColor }}>
           Etapa {currentSectionIndex + 1} de {schema.sections.length}
         </div>
         <div className="flex gap-2">
-          {schema.sections.map((_, idx) => (
+          {schema.sections.map((_: Section, idx: number) => (
             <div 
               key={idx} 
               className="h-1.5 w-8 rounded-full transition-all"
@@ -203,7 +231,7 @@ export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps
       </div>
 
       <Card glow className="p-8 md:p-10 relative">
-         <div className="absolute top-4 right-4 w-6 h-6 bg-primary rounded-full blur-xl opacity-60"></div>
+         <div className="absolute top-4 right-4 w-6 h-6 rounded-full blur-xl opacity-60" style={{ backgroundColor: primaryColor }}></div>
         <h2 className="text-3xl font-bold mb-2">{currentSection.title}</h2>
         {currentSection.description && (
           <p className="text-muted text-lg mb-8 pb-8 border-b border-white/5">{currentSection.description}</p>
@@ -216,6 +244,8 @@ export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps
                 question={question} 
                 value={answers[question.key] || ''} 
                 onChange={(val) => handleInputChange(question.key, val)} 
+                uploadUrl={`/api/t/${tenantSlug}/forms/${schema.id}/upload`}
+                primaryColor={primaryColor}
               />
             </div>
           ))}
@@ -243,13 +273,27 @@ export function FormEngine({ schema, primaryColor = '#10b981' }: FormEngineProps
   );
 }
 
-function RenderQuestion({ question, value, onChange }: { question: Question, value: string, onChange: (val: string) => void }) {
+function RenderQuestion({
+  question,
+  value,
+  onChange,
+  uploadUrl,
+  primaryColor,
+}: {
+  question: Question;
+  value: string;
+  onChange: (val: string) => void;
+  uploadUrl: string;
+  primaryColor: string;
+}) {
   if (question.type === 'video_upload') {
     return (
       <VideoUploadField 
         question={question} 
         value={value} 
         onChange={onChange} 
+        uploadUrl={uploadUrl}
+        primaryColor={primaryColor}
       />
     );
   }
@@ -258,7 +302,7 @@ function RenderQuestion({ question, value, onChange }: { question: Question, val
     return (
       <div className="w-full">
         <label className="block text-sm font-medium mb-3 text-gray-200">
-          {question.label} {question.required && <span className="text-primary">*</span>}
+          {question.label} {question.required && <span style={{ color: primaryColor }}>*</span>}
         </label>
         {question.description && (
           <p className="text-xs text-gray-400 mb-3">{question.description}</p>
@@ -287,11 +331,11 @@ function RenderQuestion({ question, value, onChange }: { question: Question, val
               <label 
                 key={optionKey} 
                 onClick={() => onChange(optionKey)}
-                className={`flex flex-col p-4 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-primary/10 border-primary shadow-[inset_0_0_10px_rgba(16,185,129,0.2)]' : 'bg-black/20 border-border hover:border-primary/40'}`}
+                className={`flex flex-col p-4 rounded-xl border transition-all cursor-pointer ${isSelected ? 'border-[color:var(--form-primary)] bg-[color:var(--form-primary-faint)] shadow-[inset_0_0_10px_var(--form-primary-soft)]' : 'bg-black/20 border-border hover:border-[color:var(--form-primary-muted)]'}`}
               >
                 <div className="flex items-center">
-                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 shrink-0 transition-colors ${isSelected ? 'border-primary' : 'border-gray-500'}`}>
-                     {isSelected && <div className="w-2.5 h-2.5 bg-primary rounded-full shadow-[0_0_5px_var(--primary)]" />}
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 shrink-0 transition-colors ${isSelected ? 'border-[color:var(--form-primary)]' : 'border-gray-500'}`}>
+                     {isSelected && <div className="w-2.5 h-2.5 rounded-full shadow-[0_0_5px_var(--form-primary)]" style={{ backgroundColor: primaryColor }} />}
                   </div>
                   <span className="text-sm font-semibold text-gray-200">{optionDisplayLabel}</span>
                 </div>
@@ -332,7 +376,7 @@ function RenderQuestion({ question, value, onChange }: { question: Question, val
     return (
       <div className="w-full">
         <label className="block text-sm font-medium mb-3 text-gray-200">
-          {question.label} {question.required && <span className="text-primary">*</span>}
+          {question.label} {question.required && <span style={{ color: primaryColor }}>*</span>}
         </label>
         {question.description && (
           <p className="text-xs text-gray-400 mb-3">{question.description}</p>
@@ -361,10 +405,10 @@ function RenderQuestion({ question, value, onChange }: { question: Question, val
               <label 
                 key={optionKey} 
                 onClick={() => toggleOption(optOption)}
-                className={`flex flex-col p-4 rounded-xl border transition-all cursor-pointer ${isChecked ? 'bg-primary/10 border-primary shadow-[inset_0_0_10px_rgba(16,185,129,0.2)]' : 'bg-black/20 border-border hover:border-primary/40'}`}
+                className={`flex flex-col p-4 rounded-xl border transition-all cursor-pointer ${isChecked ? 'border-[color:var(--form-primary)] bg-[color:var(--form-primary-faint)] shadow-[inset_0_0_10px_var(--form-primary-soft)]' : 'bg-black/20 border-border hover:border-[color:var(--form-primary-muted)]'}`}
               >
                 <div className="flex items-center">
-                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center mr-3 shrink-0 transition-colors ${isChecked ? 'bg-primary border-primary' : 'border-gray-500'}`}>
+                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center mr-3 shrink-0 transition-colors ${isChecked ? 'border-[color:var(--form-primary)]' : 'border-gray-500'}`} style={isChecked ? { backgroundColor: primaryColor } : undefined}>
                      {isChecked && (
                        <svg className="w-3.5 h-3.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -391,7 +435,7 @@ function RenderQuestion({ question, value, onChange }: { question: Question, val
     return (
       <div className="w-full">
         <label className="block text-sm font-medium mb-1.5 text-gray-200">
-          {question.label} {question.required && <span className="text-primary">*</span>}
+          {question.label} {question.required && <span style={{ color: primaryColor }}>*</span>}
         </label>
         {question.description && (
           <p className="text-xs text-gray-400 mb-3">{question.description}</p>
@@ -401,7 +445,7 @@ function RenderQuestion({ question, value, onChange }: { question: Question, val
           onChange={(e) => onChange(e.target.value)}
           placeholder="Digite sua resposta detalhada..."
           rows={4}
-          className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-gray-100 placeholder-gray-500 transition-all focus:border-primary focus:bg-black/40 focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed resize-y"
+          className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-gray-100 placeholder-gray-500 transition-all focus:border-[color:var(--form-primary)] focus:bg-black/40 focus:outline-none focus:ring-1 focus:ring-[color:var(--form-primary)] leading-relaxed resize-y"
         />
       </div>
     );
@@ -419,7 +463,19 @@ function RenderQuestion({ question, value, onChange }: { question: Question, val
   );
 }
 
-function VideoUploadField({ question, value, onChange }: { question: Question, value: string, onChange: (val: string) => void }) {
+function VideoUploadField({
+  question,
+  value,
+  onChange,
+  uploadUrl,
+  primaryColor,
+}: {
+  question: Question;
+  value: string;
+  onChange: (val: string) => void;
+  uploadUrl: string;
+  primaryColor: string;
+}) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -436,8 +492,7 @@ function VideoUploadField({ question, value, onChange }: { question: Question, v
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit: 200MB (209,715,200 bytes)
-    const MAX_SIZE_MB = 200;
+    const MAX_SIZE_MB = 50;
     const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
     if (file.size > MAX_SIZE_BYTES) {
       setError(`O arquivo é muito grande. O limite máximo é de ${MAX_SIZE_MB} MB.`);
@@ -452,51 +507,30 @@ function VideoUploadField({ question, value, onChange }: { question: Question, v
 
     setError(null);
     setUploading(true);
-    setProgress(5);
+    setProgress(15);
 
     try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', 'https://api.cloudinary.com/v1_1/dw75s1ygk/video/upload', true);
-
-      // Track upload progress in real-time
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const percentComplete = Math.round((event.loaded / event.total) * 100);
-          setProgress(percentComplete);
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status === 200) {
-          try {
-            const response = JSON.parse(xhr.responseText);
-            const videoUrl = response.secure_url;
-            onChange(videoUrl);
-            setFileName(file.name);
-            setProgress(100);
-            setUploading(false);
-          } catch (e) {
-            console.error(e);
-            setError('Erro ao processar a resposta do servidor de vídeo.');
-            setUploading(false);
-          }
-        } else {
-          console.error('Cloudinary upload error', xhr.responseText);
-          setError('Falha ao enviar o vídeo para o servidor. Tente novamente.');
-          setUploading(false);
-        }
-      };
-
-      xhr.onerror = () => {
-        setError('Erro de conexão ao enviar o arquivo. Verifique sua internet.');
-        setUploading(false);
-      };
-
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('upload_preset', 'pulse_uploads');
-      
-      xhr.send(formData);
+      setProgress(45);
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error || 'Falha ao enviar o vídeo para o servidor. Tente novamente.');
+        setUploading(false);
+        return;
+      }
+
+      onChange(result.value);
+      setFileName(file.name);
+      setProgress(100);
+      setUploading(false);
     } catch (err: any) {
       console.error(err);
       setError('Falha ao iniciar o envio do arquivo. Tente novamente.');
@@ -513,21 +547,21 @@ function VideoUploadField({ question, value, onChange }: { question: Question, v
   return (
     <div className="w-full">
       <label className="block text-sm font-medium mb-1 text-gray-200">
-        {question.label} {question.required && <span className="text-primary">*</span>}
+        {question.label} {question.required && <span style={{ color: primaryColor }}>*</span>}
       </label>
       {question.description && (
         <p className="text-xs text-gray-400 mb-3">{question.description}</p>
       )}
 
       {value ? (
-        <div className="flex items-center justify-between p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 animate-in fade-in duration-300">
+        <div className="flex items-center justify-between p-4 rounded-xl border animate-in fade-in duration-300" style={{ borderColor: colorWithAlpha(primaryColor, 0.3), backgroundColor: colorWithAlpha(primaryColor, 0.06) }}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center border" style={{ backgroundColor: colorWithAlpha(primaryColor, 0.1), borderColor: colorWithAlpha(primaryColor, 0.25), color: primaryColor }}>
               <FileVideo className="w-5 h-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-emerald-100 truncate max-w-[200px] md:max-w-xs">{fileName || 'Vídeo enviado'}</p>
-              <p className="text-xs text-emerald-400/70">✓ Upload concluído com sucesso</p>
+              <p className="text-sm font-medium text-gray-100 truncate max-w-[200px] md:max-w-xs">{fileName || 'Vídeo enviado'}</p>
+              <p className="text-xs" style={{ color: primaryColor }}>✓ Upload concluído com sucesso</p>
             </div>
           </div>
           <button 
@@ -539,21 +573,21 @@ function VideoUploadField({ question, value, onChange }: { question: Question, v
           </button>
         </div>
       ) : (
-        <div className={`relative border-2 border-dashed rounded-xl p-6 transition-all text-center ${uploading ? 'border-primary/55 bg-primary/5' : 'border-white/10 hover:border-primary/50 hover:bg-black/10'}`}>
+        <div className={`relative border-2 border-dashed rounded-xl p-6 transition-all text-center ${uploading ? 'border-[color:var(--form-primary-muted)] bg-[color:var(--form-primary-faint)]' : 'border-white/10 hover:border-[color:var(--form-primary-muted)] hover:bg-black/10'}`}>
           {uploading ? (
             <div className="flex flex-col items-center justify-center py-4">
-              <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
+              <Loader2 className="w-8 h-8 animate-spin mb-3" style={{ color: primaryColor }} />
               <p className="text-sm font-medium text-gray-200">Enviando vídeo... {progress > 0 && `${progress}%`}</p>
               <p className="text-xs text-gray-400 mt-1">Por favor, não feche esta página até o upload concluir.</p>
               <div className="w-full max-w-[200px] bg-black/40 h-1.5 rounded-full mt-4 overflow-hidden border border-white/5">
-                <div className="bg-primary h-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                <div className="h-full transition-all duration-300" style={{ width: `${progress}%`, backgroundColor: primaryColor }} />
               </div>
             </div>
           ) : (
             <label className="flex flex-col items-center justify-center cursor-pointer py-4">
               <UploadCloud className="w-10 h-10 text-gray-400 mb-3" />
               <span className="text-sm font-medium text-gray-200">Clique para selecionar seu vídeo</span>
-              <span className="text-xs text-gray-400 mt-1.5">Formatos aceitos: MP4, MOV, AVI (Tamanho máximo: 200 MB)</span>
+              <span className="text-xs text-gray-400 mt-1.5">Formatos aceitos: MP4, MOV, AVI (Tamanho máximo: 50 MB)</span>
               <input 
                 type="file" 
                 accept="video/*" 

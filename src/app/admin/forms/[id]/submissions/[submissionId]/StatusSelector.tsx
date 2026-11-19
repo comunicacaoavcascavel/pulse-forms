@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
+import { updateSubmissionStatusAction } from '../../../actions';
 
 const STATUS_OPTIONS = [
   { value: 'submitted', label: 'Nova', color: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
@@ -10,21 +10,32 @@ const STATUS_OPTIONS = [
   { value: 'rejected', label: '✕ Reprovada', color: 'text-red-400 border-red-500/40 bg-red-500/10' },
 ];
 
-export function StatusSelector({ submissionId, currentStatus }: { submissionId: string; currentStatus: string }) {
+export function StatusSelector({
+  submissionId,
+  currentStatus,
+  tenantId,
+  tenantSlug,
+}: {
+  submissionId: string;
+  currentStatus: string;
+  tenantId: string;
+  tenantSlug: string;
+}) {
   const [status, setStatus] = useState(currentStatus);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   const handleChange = async (newStatus: string) => {
     setSaving(true);
     setStatus(newStatus);
-    await supabase.from('form_submissions').update({ status: newStatus }).eq('id', submissionId);
+    const result = await updateSubmissionStatusAction(submissionId, newStatus, tenantId, tenantSlug);
+    if (!result.success) {
+      alert(result.error || 'Erro ao salvar status.');
+      setStatus(currentStatus);
+    }
     setSaving(false);
     router.refresh();
   };
-
-  const current = STATUS_OPTIONS.find(o => o.value === status) ?? STATUS_OPTIONS[0];
 
   return (
     <div className="flex flex-col gap-2 min-w-[180px]">

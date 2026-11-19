@@ -1,43 +1,109 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient, hasServiceRoleKey } from '@/utils/supabase/admin';
+import { ensureProfile, isPlatformOwner, tenantAdminPath } from '@/lib/tenancy';
+import type { TenantRole } from '@/types/tenant';
 import { revalidatePath } from 'next/cache';
+import nodeCrypto from 'crypto';
 
-export async function deleteFormAction(formId: string) {
+const EDIT_ROLES: TenantRole[] = ['owner', 'admin', 'editor'];
+const MANAGE_ROLES: TenantRole[] = ['owner', 'admin'];
+const REVIEW_ROLES: TenantRole[] = ['owner', 'admin', 'reviewer'];
+const VALID_ROLES: TenantRole[] = ['owner', 'admin', 'editor', 'reviewer'];
+
+type ActionAuth = {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  isPlatformOwner: boolean;
+  membershipRole: TenantRole | null;
+};
+
+async function requireTenantRoleAction(tenantId: string, allowedRoles: TenantRole[]): Promise<ActionAuth | { error: string }> {
   const supabase = await createClient();
-  
-  const { data: submissions } = await supabase.from('form_submissions').select('id').eq('form_id', formId);
-  
-  if (submissions && submissions.length > 0) {
-    const subIds = submissions.map((s: any) => s.id);
-    await supabase.from('form_answers').delete().in('submission_id', subIds);
-    await supabase.from('form_submissions').delete().eq('form_id', formId);
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' };
+
+  const profile = await ensureProfile(supabase, user);
+  const platformOwner = isPlatformOwner(profile, user);
+
+  const { data: membership } = await supabase
+    .from('tenant_memberships')
+    .select('role')
+    .eq('tenant_id', tenantId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  const membershipRole = membership?.role as TenantRole | null;
+
+  if (!platformOwner && (!membershipRole || !allowedRoles.includes(membershipRole))) {
+    return { error: 'Sem permissão para executar esta ação.' };
   }
 
-  await supabase.from('form_questions').delete().eq('form_id', formId);
-  await supabase.from('form_sections').delete().eq('form_id', formId);
-  await supabase.from('form_rules').delete().eq('form_id', formId);
+  return {
+    supabase,
+    userId: user.id,
+    isPlatformOwner: platformOwner,
+    membershipRole,
+  };
+}
 
-  const { error } = await supabase.from('forms').delete().eq('id', formId);
+function revalidateTenantAdmin(tenantSlug?: string) {
+  revalidatePath('/admin');
+  revalidatePath('/tenants');
+  if (tenantSlug) {
+    revalidatePath(tenantAdminPath(tenantSlug));
+  }
+}
+
+export async function deleteFormAction(formId: string, tenantId: string, tenantSlug?: string) {
+  const auth = await requireTenantRoleAction(tenantId, EDIT_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
+
+  const { supabase } = auth;
+  const { data: submissions } = await supabase
+    .from('form_submissions')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('form_id', formId);
+
+  if (submissions && submissions.length > 0) {
+    const subIds = submissions.map((submission: { id: string }) => submission.id);
+    await supabase.from('submission_files').delete().in('submission_id', subIds).eq('tenant_id', tenantId);
+    await supabase.from('manual_reviews').delete().in('submission_id', subIds).eq('tenant_id', tenantId);
+    await supabase.from('ai_evaluations').delete().in('submission_id', subIds).eq('tenant_id', tenantId);
+    await supabase.from('form_answers').delete().in('submission_id', subIds).eq('tenant_id', tenantId);
+    await supabase.from('form_submissions').delete().eq('tenant_id', tenantId).eq('form_id', formId);
+  }
+
+  await supabase.from('ai_evaluation_rules').delete().eq('tenant_id', tenantId).eq('form_id', formId);
+  await supabase.from('form_rules').delete().eq('tenant_id', tenantId).eq('form_id', formId);
+  await supabase.from('form_questions').delete().eq('tenant_id', tenantId).eq('form_id', formId);
+  await supabase.from('form_sections').delete().eq('tenant_id', tenantId).eq('form_id', formId);
+
+  const { error } = await supabase
+    .from('forms')
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('id', formId);
 
   if (error) {
     console.error('Error deleting form:', error);
     return { success: false, error: error.message };
   }
 
-  revalidatePath('/admin');
+  revalidateTenantAdmin(tenantSlug);
   return { success: true };
 }
 
-export async function createFormAction(payload: any) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export async function createFormAction(payload: any, tenantId: string, tenantSlug?: string) {
+  const auth = await requireTenantRoleAction(tenantId, EDIT_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
 
-  if (!user) {
-    return { success: false, error: 'Unauthorized' };
-  }
-
+  const { supabase, userId } = auth;
   const { data: form, error: formError } = await supabase.from('forms').insert({
+    tenant_id: tenantId,
     title: payload.title,
     description: payload.description,
     slug: payload.slug,
@@ -47,48 +113,45 @@ export async function createFormAction(payload: any) {
     theme: payload.theme,
     folder_id: payload.folder_id,
     review_criteria: payload.review_criteria,
-    created_by: user.id,
+    created_by: userId,
   }).select().single();
 
   if (formError || !form) {
     return { success: false, error: formError?.message || 'Erro ao criar formulário' };
   }
 
-  // Insert sections and questions
-  if (payload.sections && payload.sections.length > 0) {
-    for (const [sIndex, section] of payload.sections.entries()) {
-      const { data: secData, error: secErr } = await supabase.from('form_sections').insert({
+  if (payload.sections?.length > 0) {
+    for (const [sectionIndex, section] of payload.sections.entries()) {
+      const { data: secData } = await supabase.from('form_sections').insert({
+        tenant_id: tenantId,
         form_id: form.id,
         title: section.title,
         description: section.description,
-        order_index: sIndex + 1,
+        order_index: sectionIndex + 1,
       }).select().single();
 
-      if (secData && section.questions && section.questions.length > 0) {
-        const questionsToInsert = section.questions.map((q: any, qIndex: number) => ({
+      if (secData && section.questions?.length > 0) {
+        const questionsToInsert = section.questions.map((question: any, questionIndex: number) => ({
+          tenant_id: tenantId,
           form_id: form.id,
           section_id: secData.id,
-          label: q.label,
-          type: q.type,
-          options: q.options ? JSON.stringify(q.options) : null,
-          is_required: q.required,
-          order_index: qIndex + 1,
+          label: question.label,
+          type: question.type,
+          options: question.options ? JSON.stringify(question.options) : null,
+          is_required: question.required,
+          order_index: questionIndex + 1,
         }));
 
-        // Insert and get back IDs isn't straightforward without a loop if we need mapping.
-        // Wait, rules reference question_id! But question_id in the payload is a temp string `q-12345`.
-        // To properly map rules to questions, we need the real DB IDs.
-        const { data: insertedQuestions } = await supabase.from('form_questions').insert(questionsToInsert).select();
-        
-        // Map temp IDs to real IDs
+        const { data: insertedQuestions } = await supabase
+          .from('form_questions')
+          .insert(questionsToInsert)
+          .select();
+
         if (payload.rules && insertedQuestions) {
           payload.rules.forEach((rule: any) => {
-            // find which question label matches? The frontend temp ID isn't sent to DB.
-            // Let's match by index/label for now, or just save the rule using the new ID.
-            // A simple way: find the index of the rule's question_id in section.questions.
-            const qIdx = section.questions.findIndex((sq: any) => sq.id === rule.question_id);
-            if (qIdx !== -1 && insertedQuestions[qIdx]) {
-              rule.real_question_id = insertedQuestions[qIdx].id;
+            const questionIndex = section.questions.findIndex((sectionQuestion: any) => sectionQuestion.id === rule.question_id);
+            if (questionIndex !== -1 && insertedQuestions[questionIndex]) {
+              rule.real_question_id = insertedQuestions[questionIndex].id;
               rule.real_section_id = secData.id;
             }
           });
@@ -97,62 +160,62 @@ export async function createFormAction(payload: any) {
     }
   }
 
-  // Insert rules
-  if (payload.rules && payload.rules.length > 0) {
-    const rulesToInsert = payload.rules.filter((r: any) => r.real_question_id).map((r: any) => ({
+  if (payload.rules?.length > 0) {
+    const rulesToInsert = payload.rules.filter((rule: any) => rule.real_question_id).map((rule: any) => ({
+      tenant_id: tenantId,
       form_id: form.id,
-      section_id: r.real_section_id,
-      question_id: r.real_question_id,
-      rule_type: r.type,
-      condition: { value: r.condition_value },
+      section_id: rule.real_section_id,
+      question_id: rule.real_question_id,
+      rule_type: rule.type,
+      condition: { value: rule.condition_value },
       action: { block: true },
-      message: r.message
+      message: rule.message,
     }));
+
     if (rulesToInsert.length > 0) {
       await supabase.from('form_rules').insert(rulesToInsert);
     }
   }
 
-  // Insert AI evaluation rules
-  if (payload.aiRules && payload.aiRules.length > 0) {
-    const aiRulesToInsert = payload.aiRules.map((ar: any) => ({
+  if (payload.aiRules?.length > 0) {
+    const aiRulesToInsert = payload.aiRules.map((rule: any) => ({
+      tenant_id: tenantId,
       form_id: form.id,
-      name: ar.name,
-      description: ar.description,
-      criteria: ar.criteria || [],
-      max_score: ar.max_score || 20,
-      active: ar.active !== false,
-      created_by: user.id
+      name: rule.name,
+      description: rule.description,
+      criteria: rule.criteria || [],
+      max_score: rule.max_score || 20,
+      active: rule.active !== false,
+      created_by: userId,
     }));
     await supabase.from('ai_evaluation_rules').insert(aiRulesToInsert);
   }
 
-  revalidatePath('/admin');
+  revalidateTenantAdmin(tenantSlug);
   return { success: true, formId: form.id };
 }
 
-export async function createFolderAction(name: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export async function createFolderAction(name: string, tenantId: string, tenantSlug?: string) {
+  const auth = await requireTenantRoleAction(tenantId, EDIT_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
 
-  if (!user) return { success: false, error: 'Unauthorized' };
-
-  const { data, error } = await supabase.from('form_folders').insert({
+  const { data, error } = await auth.supabase.from('form_folders').insert({
+    tenant_id: tenantId,
     name,
-    created_by: user.id
+    created_by: auth.userId,
   }).select().single();
 
   if (error) return { success: false, error: error.message };
-  
-  revalidatePath('/admin');
+
+  revalidateTenantAdmin(tenantSlug);
   return { success: true, folder: data };
 }
 
-export async function updateFormAction(formId: string, payload: any) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: 'Unauthorized' };
+export async function updateFormAction(formId: string, payload: any, tenantId: string, tenantSlug?: string) {
+  const auth = await requireTenantRoleAction(tenantId, EDIT_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
 
+  const { supabase, userId } = auth;
   const { error: formError } = await supabase.from('forms').update({
     title: payload.title,
     description: payload.description,
@@ -163,45 +226,48 @@ export async function updateFormAction(formId: string, payload: any) {
     welcome_text: payload.welcome_text,
     theme: payload.theme,
     review_criteria: payload.review_criteria,
-    updated_at: new Date().toISOString()
-  }).eq('id', formId);
+    updated_at: new Date().toISOString(),
+  }).eq('tenant_id', tenantId).eq('id', formId);
 
   if (formError) return { success: false, error: formError.message };
 
-  // Delete old rules, questions, sections
-  await supabase.from('form_rules').delete().eq('form_id', formId);
-  await supabase.from('ai_evaluation_rules').delete().eq('form_id', formId);
-  await supabase.from('form_questions').delete().eq('form_id', formId);
-  await supabase.from('form_sections').delete().eq('form_id', formId);
+  await supabase.from('form_rules').delete().eq('tenant_id', tenantId).eq('form_id', formId);
+  await supabase.from('ai_evaluation_rules').delete().eq('tenant_id', tenantId).eq('form_id', formId);
+  await supabase.from('form_questions').delete().eq('tenant_id', tenantId).eq('form_id', formId);
+  await supabase.from('form_sections').delete().eq('tenant_id', tenantId).eq('form_id', formId);
 
-  // Insert new sections and questions (same logic as createFormAction)
-  if (payload.sections && payload.sections.length > 0) {
-    for (const [sIndex, section] of payload.sections.entries()) {
+  if (payload.sections?.length > 0) {
+    for (const [sectionIndex, section] of payload.sections.entries()) {
       const { data: secData } = await supabase.from('form_sections').insert({
+        tenant_id: tenantId,
         form_id: formId,
         title: section.title,
         description: section.description,
-        order_index: sIndex + 1,
+        order_index: sectionIndex + 1,
       }).select().single();
 
-      if (secData && section.questions && section.questions.length > 0) {
-        const questionsToInsert = section.questions.map((q: any, qIndex: number) => ({
+      if (secData && section.questions?.length > 0) {
+        const questionsToInsert = section.questions.map((question: any, questionIndex: number) => ({
+          tenant_id: tenantId,
           form_id: formId,
           section_id: secData.id,
-          label: q.label,
-          type: q.type,
-          options: q.options ? JSON.stringify(q.options) : null,
-          is_required: q.required,
-          order_index: qIndex + 1,
+          label: question.label,
+          type: question.type,
+          options: question.options ? JSON.stringify(question.options) : null,
+          is_required: question.required,
+          order_index: questionIndex + 1,
         }));
 
-        const { data: insertedQuestions } = await supabase.from('form_questions').insert(questionsToInsert).select();
-        
+        const { data: insertedQuestions } = await supabase
+          .from('form_questions')
+          .insert(questionsToInsert)
+          .select();
+
         if (payload.rules && insertedQuestions) {
           payload.rules.forEach((rule: any) => {
-            const qIdx = section.questions.findIndex((sq: any) => sq.id === rule.question_id);
-            if (qIdx !== -1 && insertedQuestions[qIdx]) {
-              rule.real_question_id = insertedQuestions[qIdx].id;
+            const questionIndex = section.questions.findIndex((sectionQuestion: any) => sectionQuestion.id === rule.question_id);
+            if (questionIndex !== -1 && insertedQuestions[questionIndex]) {
+              rule.real_question_id = insertedQuestions[questionIndex].id;
               rule.real_section_id = secData.id;
             }
           });
@@ -210,255 +276,259 @@ export async function updateFormAction(formId: string, payload: any) {
     }
   }
 
-  // Insert rules
-  if (payload.rules && payload.rules.length > 0) {
-    const rulesToInsert = payload.rules.filter((r: any) => r.real_question_id).map((r: any) => ({
+  if (payload.rules?.length > 0) {
+    const rulesToInsert = payload.rules.filter((rule: any) => rule.real_question_id).map((rule: any) => ({
+      tenant_id: tenantId,
       form_id: formId,
-      section_id: r.real_section_id,
-      question_id: r.real_question_id,
-      rule_type: r.type,
-      condition: { value: r.condition_value },
+      section_id: rule.real_section_id,
+      question_id: rule.real_question_id,
+      rule_type: rule.type,
+      condition: { value: rule.condition_value },
       action: { block: true },
-      message: r.message
+      message: rule.message,
     }));
+
     if (rulesToInsert.length > 0) {
       await supabase.from('form_rules').insert(rulesToInsert);
     }
   }
 
-  // Insert AI evaluation rules
-  if (payload.aiRules && payload.aiRules.length > 0) {
-    const aiRulesToInsert = payload.aiRules.map((ar: any) => ({
+  if (payload.aiRules?.length > 0) {
+    const aiRulesToInsert = payload.aiRules.map((rule: any) => ({
+      tenant_id: tenantId,
       form_id: formId,
-      name: ar.name,
-      description: ar.description,
-      criteria: ar.criteria || [],
-      max_score: ar.max_score || 20,
-      active: ar.active !== false,
-      created_by: user.id
+      name: rule.name,
+      description: rule.description,
+      criteria: rule.criteria || [],
+      max_score: rule.max_score || 20,
+      active: rule.active !== false,
+      created_by: userId,
     }));
     await supabase.from('ai_evaluation_rules').insert(aiRulesToInsert);
   }
 
-  revalidatePath('/admin');
+  revalidateTenantAdmin(tenantSlug);
   return { success: true };
 }
 
-export async function deleteFolderAction(folderId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: 'Unauthorized' };
+export async function deleteFolderAction(folderId: string, tenantId: string, tenantSlug?: string) {
+  const auth = await requireTenantRoleAction(tenantId, EDIT_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
 
-  const { data: forms } = await supabase.from('forms').select('id').eq('folder_id', folderId);
-  
+  const { data: forms } = await auth.supabase
+    .from('forms')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('folder_id', folderId);
+
   if (forms && forms.length > 0) {
     for (const form of forms) {
-      await deleteFormAction(form.id);
+      await deleteFormAction(form.id, tenantId, tenantSlug);
     }
   }
 
-  const { error } = await supabase.from('form_folders').delete().eq('id', folderId);
+  const { error } = await auth.supabase
+    .from('form_folders')
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('id', folderId);
+
   if (error) return { success: false, error: error.message };
-  
-  revalidatePath('/admin');
+
+  revalidateTenantAdmin(tenantSlug);
   return { success: true };
 }
 
-export async function moveFormAction(formId: string, folderId: string | null) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: 'Unauthorized' };
+export async function moveFormAction(formId: string, folderId: string | null, tenantId: string, tenantSlug?: string) {
+  const auth = await requireTenantRoleAction(tenantId, EDIT_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
 
-  const { error } = await supabase.from('forms').update({ folder_id: folderId }).eq('id', formId);
+  const { error } = await auth.supabase
+    .from('forms')
+    .update({ folder_id: folderId })
+    .eq('tenant_id', tenantId)
+    .eq('id', formId);
+
   if (error) return { success: false, error: error.message };
 
-  revalidatePath('/admin');
+  revalidateTenantAdmin(tenantSlug);
   return { success: true };
 }
 
-export async function saveManualReviewAction(submissionId: string, comments: string, recommendation: string, scores: any = {}) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: 'Unauthorized' };
+export async function updateSubmissionStatusAction(submissionId: string, status: string, tenantId: string, tenantSlug?: string) {
+  const auth = await requireTenantRoleAction(tenantId, REVIEW_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
 
-  // Fetch the submission to get form_id for path revalidation
+  const { error } = await auth.supabase
+    .from('form_submissions')
+    .update({ status })
+    .eq('tenant_id', tenantId)
+    .eq('id', submissionId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidateTenantAdmin(tenantSlug);
+  return { success: true };
+}
+
+export async function saveManualReviewAction(
+  submissionId: string,
+  comments: string,
+  recommendation: string,
+  scores: any = {},
+  tenantId: string,
+  tenantSlug?: string,
+) {
+  const auth = await requireTenantRoleAction(tenantId, REVIEW_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
+
+  const { supabase, userId } = auth;
   const { data: submission } = await supabase
     .from('form_submissions')
-    .select('form_id')
+    .select('id, form_id')
+    .eq('tenant_id', tenantId)
     .eq('id', submissionId)
     .single();
 
   if (!submission) return { success: false, error: 'Submissão não encontrada' };
 
-  // Check if manual review already exists
   const { data: existing } = await supabase
     .from('manual_reviews')
     .select('id')
+    .eq('tenant_id', tenantId)
     .eq('submission_id', submissionId)
     .maybeSingle();
 
-  let reviewError = null;
+  const payload = {
+    tenant_id: tenantId,
+    submission_id: submissionId,
+    comments,
+    recommendation,
+    scores,
+    reviewer_id: userId,
+  };
 
-  if (existing) {
-    const { error } = await supabase
-      .from('manual_reviews')
-      .update({
-        comments,
-        recommendation,
-        scores,
-        reviewer_id: user.id
-      })
-      .eq('id', existing.id);
-    reviewError = error;
-  } else {
-    const { error } = await supabase
-      .from('manual_reviews')
-      .insert({
-        submission_id: submissionId,
-        comments,
-        recommendation,
-        scores,
-        reviewer_id: user.id
-      });
-    reviewError = error;
-  }
+  const { error: reviewError } = existing
+    ? await supabase.from('manual_reviews').update(payload).eq('tenant_id', tenantId).eq('id', existing.id)
+    : await supabase.from('manual_reviews').insert(payload);
 
   if (reviewError) {
     console.error('Error saving manual review:', reviewError);
     return { success: false, error: reviewError.message };
   }
 
-  // Update submission status based on manual review recommendation
   let newStatus = 'under_review';
   if (recommendation === 'approved') newStatus = 'approved';
   else if (recommendation === 'rejected') newStatus = 'rejected';
 
-  const { error: subUpdateErr } = await supabase
+  await supabase
     .from('form_submissions')
     .update({ status: newStatus })
+    .eq('tenant_id', tenantId)
     .eq('id', submissionId);
 
-  if (subUpdateErr) {
-    console.error('Error updating submission status:', subUpdateErr);
+  if (tenantSlug) {
+    revalidatePath(`${tenantAdminPath(tenantSlug)}/forms/${submission.form_id}/submissions/${submissionId}`);
   }
-
-  revalidatePath(`/admin/forms/${submission.form_id}/submissions/${submissionId}`);
   return { success: true };
 }
 
-export async function createUserAction(email: string, name: string, role: string, password?: string) {
-  const supabase = await createClient();
-  const { data: { user: currentUser } } = await supabase.auth.getUser();
-  if (!currentUser) return { success: false, error: 'Unauthorized' };
+export async function createUserAction(
+  tenantId: string,
+  email: string,
+  name: string,
+  role: TenantRole,
+  password?: string,
+  tenantSlug?: string,
+) {
+  const auth = await requireTenantRoleAction(tenantId, MANAGE_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
+  if (!VALID_ROLES.includes(role)) return { success: false, error: 'Papel inválido.' };
+  if (!hasServiceRoleKey()) return { success: false, error: 'SUPABASE_SERVICE_ROLE_KEY não configurada.' };
 
-  // Check if current user is super_admin
-  const { data: currentProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', currentUser.id)
-    .single();
-
-  if (currentProfile?.role !== 'super_admin') {
-    return { success: false, error: 'Apenas Super Admins podem gerenciar usuários.' };
-  }
-
-  const finalPassword = password || 'PulseForms2026!';
-  const { data: authData, error: authError } = await supabase.auth.signUp({
+  const admin = createAdminClient();
+  const finalPassword = password || cryptoRandomPassword();
+  const { data: authData, error: authError } = await admin.auth.admin.createUser({
     email,
     password: finalPassword,
-    options: {
-      data: {
-        role,
-        name
-      }
-    }
+    email_confirm: true,
+    user_metadata: { name },
   });
 
-  if (authError) {
-    console.error('Error signing up user:', authError);
-    return { success: false, error: authError.message };
+  if (authError || !authData.user) {
+    return { success: false, error: authError?.message || 'Erro ao criar usuário.' };
   }
 
-  const newAuthUser = authData.user;
-  if (!newAuthUser) {
-    return { success: false, error: 'Erro ao registrar usuário na autenticação.' };
-  }
-
-  // Insert profile row
-  const { error: profileError } = await supabase
+  const { error: profileError } = await admin
     .from('profiles')
-    .insert({
-      id: newAuthUser.id,
+    .upsert({
+      id: authData.user.id,
       email,
       name,
-      role
+      role,
+      platform_role: 'member',
     });
 
-  if (profileError) {
-    console.error('Error inserting user profile:', profileError);
-    return { success: false, error: profileError.message };
-  }
+  if (profileError) return { success: false, error: profileError.message };
 
-  revalidatePath('/admin/users');
-  return { success: true };
+  const { error: membershipError } = await admin
+    .from('tenant_memberships')
+    .upsert({
+      tenant_id: tenantId,
+      user_id: authData.user.id,
+      role,
+    }, { onConflict: 'tenant_id,user_id' });
+
+  if (membershipError) return { success: false, error: membershipError.message };
+
+  if (tenantSlug) revalidatePath(`${tenantAdminPath(tenantSlug)}/users`);
+  return { success: true, temporaryPassword: finalPassword };
 }
 
-export async function updateUserRoleAction(userId: string, role: string) {
-  const supabase = await createClient();
-  const { data: { user: currentUser } } = await supabase.auth.getUser();
-  if (!currentUser) return { success: false, error: 'Unauthorized' };
+export async function updateUserRoleAction(tenantId: string, userId: string, role: TenantRole, tenantSlug?: string) {
+  const auth = await requireTenantRoleAction(tenantId, MANAGE_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
+  if (!VALID_ROLES.includes(role)) return { success: false, error: 'Papel inválido.' };
+  if (!hasServiceRoleKey()) return { success: false, error: 'SUPABASE_SERVICE_ROLE_KEY não configurada.' };
 
-  // Check if current user is super_admin
-  const { data: currentProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', currentUser.id)
-    .single();
-
-  if (currentProfile?.role !== 'super_admin') {
-    return { success: false, error: 'Apenas Super Admins podem gerenciar usuários.' };
-  }
-
-  const { error } = await supabase
-    .from('profiles')
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from('tenant_memberships')
     .update({ role })
-    .eq('id', userId);
+    .eq('tenant_id', tenantId)
+    .eq('user_id', userId);
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath('/admin/users');
+  await admin.from('profiles').update({ role }).eq('id', userId);
+  if (tenantSlug) revalidatePath(`${tenantAdminPath(tenantSlug)}/users`);
   return { success: true };
 }
 
-export async function deleteUserAction(userId: string) {
-  const supabase = await createClient();
-  const { data: { user: currentUser } } = await supabase.auth.getUser();
-  if (!currentUser) return { success: false, error: 'Unauthorized' };
+export async function deleteUserAction(tenantId: string, userId: string, tenantSlug?: string) {
+  const auth = await requireTenantRoleAction(tenantId, MANAGE_ROLES);
+  if ('error' in auth) return { success: false, error: auth.error };
 
-  // Check if current user is super_admin
-  const { data: currentProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', currentUser.id)
-    .single();
-
-  if (currentProfile?.role !== 'super_admin') {
-    return { success: false, error: 'Apenas Super Admins podem gerenciar usuários.' };
+  if (userId === auth.userId) {
+    return { success: false, error: 'Você não pode remover a si mesmo deste tenant.' };
   }
 
-  if (userId === currentUser.id) {
-    return { success: false, error: 'Você não pode excluir seu próprio usuário.' };
-  }
+  if (!hasServiceRoleKey()) return { success: false, error: 'SUPABASE_SERVICE_ROLE_KEY não configurada.' };
 
-  // Deleting the profile row. (auth.users row can be deleted from the Supabase panel or handled by CASCADE if configured,
-  // but deleting the profile row revokes their custom role access and removes them from listing).
-  const { error } = await supabase
-    .from('profiles')
+  const { error } = await createAdminClient()
+    .from('tenant_memberships')
     .delete()
-    .eq('id', userId);
+    .eq('tenant_id', tenantId)
+    .eq('user_id', userId);
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath('/admin/users');
+  if (tenantSlug) revalidatePath(`${tenantAdminPath(tenantSlug)}/users`);
   return { success: true };
+}
+
+function cryptoRandomPassword() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes = nodeCrypto.randomBytes(14);
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
 }

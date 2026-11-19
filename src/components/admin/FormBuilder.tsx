@@ -5,39 +5,50 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { createFormAction, updateFormAction } from '@/app/admin/forms/actions';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
 import { Palette, ShieldAlert, Brain, X, Plus, Trash2, Circle, Square, Award } from 'lucide-react';
+import {
+  createDefaultFormSections,
+  createDefaultManualReviewCriteria,
+  createManualReviewCriterion,
+} from '@/lib/formDefaults';
 
-export function FormBuilder({ folders, initialData }: { folders?: any[], initialData?: any }) {
+export function FormBuilder({
+  folders,
+  initialData,
+  tenantId,
+  tenantSlug,
+}: {
+  folders?: any[];
+  initialData?: any;
+  tenantId: string;
+  tenantSlug: string;
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const supabase = createClient();
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadingImage(true);
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `${fileName}`;
+    const formData = new FormData();
+    formData.append('file', file);
 
-    const { error: uploadError } = await supabase.storage
-      .from('form_assets')
-      .upload(filePath, file);
+    const response = await fetch(`/api/t/${tenantSlug}/assets`, {
+      method: 'POST',
+      body: formData,
+    });
 
-    if (uploadError) {
-      alert('Erro ao fazer upload da imagem.');
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.error || 'Erro ao fazer upload da imagem.');
       setUploadingImage(false);
       return;
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('form_assets')
-      .getPublicUrl(filePath);
-
-    setTheme({ ...theme, backgroundImage: publicUrl });
+    setTheme({ ...theme, backgroundImage: result.publicUrl });
     setUploadingImage(false);
   };
   
@@ -52,20 +63,39 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
   const [folderId, setFolderId] = useState<string>(initialData?.folder_id || '');
   
   // Sections State
-  const [sections, setSections] = useState<any[]>(initialData?.sections || []);
+  const [sections, setSections] = useState<any[]>(() => (
+    initialData ? (initialData.sections || []) : createDefaultFormSections()
+  ));
   
   // Rules State
   const [rules, setRules] = useState<any[]>(initialData?.rules || []);
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
   // Manual Review Criteria State
-  const [reviewCriteria, setReviewCriteria] = useState<any[]>(initialData?.review_criteria || []);
+  const [reviewCriteria, setReviewCriteria] = useState<any[]>(() => (
+    initialData ? (initialData.review_criteria || []) : createDefaultManualReviewCriteria()
+  ));
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
   // Theme State
-  const defaultTheme = { primaryColor: '#10b981', backgroundType: 'gradient', backgroundGradient: 'linear-gradient(to bottom right, #020617, #064e3b)', backgroundColor: '#000000' };
+  const defaultPrimaryColor = '#10b981';
+  const defaultTheme = { primaryColor: defaultPrimaryColor, backgroundType: 'gradient', backgroundGradient: 'linear-gradient(to bottom right, #020617, #064e3b)', backgroundColor: '#000000' };
   const [theme, setTheme] = useState(initialData?.theme || defaultTheme);
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+
+  const applyThemePatch = (patch: Record<string, string>, syncedPrimaryColor?: string) => {
+    setTheme((currentTheme: Record<string, string>) => {
+      const currentPrimary = (currentTheme.primaryColor || '').toLowerCase();
+      const shouldSyncPrimary = Boolean(syncedPrimaryColor)
+        && (!currentPrimary || currentPrimary === defaultPrimaryColor);
+
+      return {
+        ...currentTheme,
+        ...patch,
+        ...(shouldSyncPrimary ? { primaryColor: syncedPrimaryColor } : {}),
+      };
+    });
+  };
 
   // AI Rules State
   const defaultAiRules = [
@@ -141,7 +171,7 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
   };
 
   const removeSection = (sIndex: number) => {
-    setSections(sections.filter((_, i) => i !== sIndex));
+    setSections(sections.filter((_: unknown, i: number) => i !== sIndex));
   };
 
   const addQuestion = (sIndex: number) => {
@@ -173,7 +203,7 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
   };
 
   const removeRule = (rIndex: number) => {
-    setRules(rules.filter((_, i) => i !== rIndex));
+    setRules(rules.filter((_: unknown, i: number) => i !== rIndex));
   };
 
   // AI Rules Helper Functions
@@ -195,7 +225,7 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
   };
 
   const removeAiRule = (index: number) => {
-    setAiRules(aiRules.filter((_, i) => i !== index));
+    setAiRules(aiRules.filter((_: unknown, i: number) => i !== index));
   };
 
   const addAiCriterion = (ruleIndex: number) => {
@@ -243,13 +273,13 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
     };
 
     const res = initialData?.id 
-      ? await updateFormAction(initialData.id, payload)
-      : await createFormAction(payload);
+      ? await updateFormAction(initialData.id, payload, tenantId, tenantSlug)
+      : await createFormAction(payload, tenantId, tenantSlug);
 
     setLoading(false);
 
     if (res.success) {
-      router.push('/admin');
+      router.push(`/t/${tenantSlug}/admin`);
     } else {
       alert(res.error || 'Erro ao salvar formulário');
     }
@@ -493,7 +523,7 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const newOpts = currentOpts.filter((_, idx) => idx !== optIndex);
+                                  const newOpts = currentOpts.filter((_: string, idx: number) => idx !== optIndex);
                                   updateQuestion(sIndex, qIndex, 'options', newOpts);
                                 }}
                                 disabled={currentOpts.length <= 1}
@@ -621,11 +651,10 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
                               const start = e.target.value;
                               const end = theme.gradientEnd || '#064e3b';
                               const style = theme.gradientStyle || 'to bottom right';
-                              setTheme({ 
-                                ...theme, 
+                              applyThemePatch({
                                 gradientStart: start,
                                 backgroundGradient: `${style.includes('circle') ? 'radial' : 'linear'}-gradient(${style}, ${start}, ${end})`
-                              });
+                              }, end);
                             }}
                             className="absolute inset-[-10px] w-16 h-16 cursor-pointer"
                           />
@@ -639,11 +668,10 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
                               const end = e.target.value;
                               const start = theme.gradientStart || '#020617';
                               const style = theme.gradientStyle || 'to bottom right';
-                              setTheme({ 
-                                ...theme, 
+                              applyThemePatch({
                                 gradientEnd: end,
                                 backgroundGradient: `${style.includes('circle') ? 'radial' : 'linear'}-gradient(${style}, ${start}, ${end})`
-                              });
+                              }, end);
                             }}
                             className="absolute inset-[-10px] w-16 h-16 cursor-pointer"
                           />
@@ -722,7 +750,9 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
                     : '#000'
                 }}>
                 <div className="bg-black/60 backdrop-blur-md p-6 rounded-lg border border-white/10 text-center flex flex-col gap-4 items-center">
+                  <div className="h-1.5 w-10 rounded-full" style={{ backgroundColor: theme.primaryColor, boxShadow: `0 0 10px ${theme.primaryColor}` }} />
                   <h4 className="text-white font-bold text-lg">Preview do Formulário</h4>
+                  <span className="text-sm" style={{ color: theme.primaryColor }}>* Campo obrigatório</span>
                   <button style={{ backgroundColor: theme.primaryColor }} className="px-6 py-2.5 rounded-lg text-black font-semibold text-sm w-full max-w-[200px] shadow-lg transition-transform hover:scale-105">
                     Botão Principal
                   </button>
@@ -732,7 +762,14 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
             </div>
             
             <div className="p-4 border-t border-white/10 bg-black/40 flex justify-end">
-              <Button variant="primary" onClick={() => setIsThemeModalOpen(false)}>Concluído</Button>
+              <button
+                type="button"
+                onClick={() => setIsThemeModalOpen(false)}
+                className="w-full py-3 px-4 rounded-xl font-medium transition-all focus:outline-none text-black hover:opacity-90 active:scale-[0.99]"
+                style={{ backgroundColor: theme.primaryColor, boxShadow: `0 0 18px -8px ${theme.primaryColor}` }}
+              >
+                Concluído
+              </button>
             </div>
           </Card>
         </div>
@@ -980,7 +1017,7 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
                       <div key={index} className="p-4 rounded-xl border border-white/5 bg-white/[0.01] flex flex-col gap-3 relative group">
                         <button 
                           onClick={() => {
-                            setReviewCriteria(reviewCriteria.filter((_, idx) => idx !== index));
+                            setReviewCriteria(reviewCriteria.filter((_: unknown, idx: number) => idx !== index));
                           }}
                           className="absolute top-4 right-4 text-gray-500 hover:text-red-400 text-xs transition-colors p-1"
                           title="Remover Critério"
@@ -1048,7 +1085,7 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
                 onClick={() => {
                   setReviewCriteria([
                     ...reviewCriteria,
-                    { name: 'Novo Critério', description: '', max_score: 10 }
+                    createManualReviewCriterion(reviewCriteria.length)
                   ]);
                 }}
                 className="w-full py-2.5 border border-dashed border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-bold rounded-xl transition-all text-xs flex items-center justify-center gap-1.5"
@@ -1066,8 +1103,8 @@ export function FormBuilder({ folders, initialData }: { folders?: any[], initial
         </div>
       )}
 
-      <div className="fixed bottom-0 left-0 w-full p-4 bg-background/80 backdrop-blur-md border-t border-white/10 flex justify-end gap-4 z-40">
-        <Button variant="outline" onClick={() => router.push('/admin')}>Cancelar</Button>
+      <div className="zalen-bottom-bar fixed bottom-0 left-0 w-full p-4 flex justify-end gap-4 z-40">
+        <Button variant="outline" onClick={() => router.push(`/t/${tenantSlug}/admin`)}>Cancelar</Button>
         <Button variant="primary" onClick={handleSave} disabled={loading}>
           {loading ? 'Salvando...' : 'Salvar Formulário'}
         </Button>

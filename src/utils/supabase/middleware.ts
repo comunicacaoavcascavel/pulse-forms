@@ -1,14 +1,36 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getSupabasePublicConfig } from './config'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   })
 
+  const pathname = request.nextUrl.pathname;
+  const protectedRoute = pathname.startsWith('/owner')
+    || pathname.startsWith('/tenants')
+    || pathname.startsWith('/admin')
+    || /^\/t\/[^/]+\/admin(?:\/|$)/.test(pathname);
+
+  let url: string;
+  let anonKey: string;
+  try {
+    ({ url, anonKey } = getSupabasePublicConfig());
+  } catch {
+    if (protectedRoute && !pathname.startsWith('/admin/login') && pathname !== '/login') {
+      const redirectUrl = request.nextUrl.clone()
+      redirectUrl.pathname = '/login'
+      redirectUrl.searchParams.set('next', pathname)
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    return supabaseResponse
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {
@@ -31,19 +53,16 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (
-    !user &&
-    request.nextUrl.pathname.startsWith('/admin') &&
-    !request.nextUrl.pathname.startsWith('/admin/login')
-  ) {
+  if (!user && protectedRoute && !pathname.startsWith('/admin/login') && pathname !== '/login') {
     const url = request.nextUrl.clone()
-    url.pathname = '/admin/login'
+    url.pathname = '/login'
+    url.searchParams.set('next', pathname)
     return NextResponse.redirect(url)
   }
 
-  if (user && request.nextUrl.pathname === '/admin/login') {
+  if (user && (pathname === '/admin/login' || pathname === '/login')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/admin'
+    url.pathname = '/tenants'
     return NextResponse.redirect(url)
   }
 
