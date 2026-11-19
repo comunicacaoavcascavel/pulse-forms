@@ -137,8 +137,8 @@ Faça a análise completa e responda apenas o JSON.`;
           ...(forCollege && { max_tokens: 800 }),
           ...(provider === 'openrouter' && {
             provider: { require_parameters: true, data_collection: 'deny', ...(forCollege && { sort: 'latency' }) },
-            ...(forCollege && model === 'openrouter/free' && {
-              reasoning: { effort: 'none', exclude: true },
+            ...(forCollege && model.startsWith('inclusionai/ling-') && {
+              reasoning: { enabled: false, exclude: true },
             }),
           }),
         }),
